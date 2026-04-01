@@ -1,7 +1,24 @@
 import request from 'supertest';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../app';
 import { UpstreamHttpError, type ImmichGateway } from '../immich/ImmichGateway';
+
+const originalImmichBaseUrl = process.env.IMMICH_BASE_URL;
+const originalImmichApiKey = process.env.IMMICH_API_KEY;
+
+afterEach(() => {
+  if (originalImmichBaseUrl === undefined) {
+    delete process.env.IMMICH_BASE_URL;
+  } else {
+    process.env.IMMICH_BASE_URL = originalImmichBaseUrl;
+  }
+
+  if (originalImmichApiKey === undefined) {
+    delete process.env.IMMICH_API_KEY;
+  } else {
+    process.env.IMMICH_API_KEY = originalImmichApiKey;
+  }
+});
 
 function createGatewayStub(overrides: Partial<ImmichGateway>): ImmichGateway {
   return {
@@ -12,6 +29,19 @@ function createGatewayStub(overrides: Partial<ImmichGateway>): ImmichGateway {
 }
 
 describe('server app', () => {
+  it('returns a configuration error when no api key is configured', async () => {
+    process.env.IMMICH_BASE_URL = 'http://localhost:2283';
+    delete process.env.IMMICH_API_KEY;
+
+    const app = createApp();
+    const response = await request(app).post('/api/search').send({ query: 'sunset' });
+
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe(
+      'Server is not configured for Immich search. Set IMMICH_BASE_URL and IMMICH_API_KEY.',
+    );
+  });
+
   it('rejects invalid date ranges', async () => {
     const app = createApp({
       immichGateway: createGatewayStub({
