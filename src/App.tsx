@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import type { SearchRequest, SearchResult } from './types';
-import { MockSearchService } from './services';
+import { ApiSearchService } from './services';
 import type { SearchService } from './services';
 import { SearchForm, SearchResults } from './features/search';
 import { EmptyState, ErrorBanner } from './components';
@@ -8,8 +8,13 @@ import styles from './App.module.css';
 
 type SearchState = 'idle' | 'loading' | 'success' | 'error';
 
-function App() {
-  const searchService: SearchService = useMemo(() => new MockSearchService(), []);
+const defaultSearchService = new ApiSearchService();
+
+interface AppProps {
+  searchService?: SearchService;
+}
+
+function App({ searchService = defaultSearchService }: AppProps) {
 
   const [results, setResults] = useState<SearchResult[]>([]);
   const [total, setTotal] = useState(0);

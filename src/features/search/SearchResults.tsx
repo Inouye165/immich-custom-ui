@@ -24,7 +24,9 @@ export function SearchResults({ results, total }: SearchResultsProps) {
               <time className={styles.date} dateTime={item.date}>
                 {new Date(item.date).toLocaleDateString()}
               </time>
-              <p className={styles.description}>{item.description}</p>
+              {item.description && (
+                <p className={styles.description}>{item.description}</p>
+              )}
             </div>
           </article>
         ))}

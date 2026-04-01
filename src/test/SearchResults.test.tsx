@@ -7,14 +7,14 @@ const SAMPLE_RESULTS: SearchResult[] = [
   {
     id: '1',
     title: 'Sunset at the beach',
-    thumbnailUrl: 'https://placehold.co/300x200',
+    thumbnailUrl: '/api/assets/1/thumbnail?size=preview',
     date: '2024-08-15',
     description: 'Golden hour at the coast.',
   },
   {
     id: '2',
     title: 'Mountain hike',
-    thumbnailUrl: 'https://placehold.co/300x200',
+    thumbnailUrl: '/api/assets/2/thumbnail?size=preview',
     date: '2024-07-22',
     description: 'Trail through alpine meadows.',
   },
