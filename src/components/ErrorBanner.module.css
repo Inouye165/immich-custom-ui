@@ -1,0 +1,14 @@
+.banner {
+  background: #fce4ec;
+  color: #c62828;
+  border: 1px solid #ef9a9a;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  max-width: 600px;
+  margin: 1rem auto;
+  text-align: center;
+}
+
+.banner p {
+  margin: 0;
+}
