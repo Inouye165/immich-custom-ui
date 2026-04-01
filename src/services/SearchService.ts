@@ -1,6 +1,6 @@
 import type { SearchRequest, SearchResponse } from '../types';
 
-/** Contract for any search backend — mock, Immich API, etc. */
+/** Contract for the active app search implementation. */
 export interface SearchService {
   search(request: SearchRequest): Promise<SearchResponse>;
 }

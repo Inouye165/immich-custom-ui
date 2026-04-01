@@ -11,7 +11,7 @@ export interface SearchResult {
   title: string;
   thumbnailUrl: string;
   date: string;
-  description: string;
+  description?: string;
 }
 
 export interface SearchResponse {
