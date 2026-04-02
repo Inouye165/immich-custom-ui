@@ -3,18 +3,18 @@ import styles from './ArchiveStudio.module.css';
 
 interface ArchiveStudioProps {
   featuredImages: ArchiveFeaturedImage[];
-  isChoosingImage: boolean;
   name: string;
   onArchiveNameChange: (value: string) => void;
+  onClose: () => void;
   onRemoveImage: (assetId: string) => void;
   onUpdateImage: (assetId: string, update: Partial<ArchiveFeaturedImage>) => void;
 }
 
 export function ArchiveStudio({
   featuredImages,
-  isChoosingImage,
   name,
   onArchiveNameChange,
+  onClose,
   onRemoveImage,
   onUpdateImage,
 }: ArchiveStudioProps) {
@@ -25,7 +25,12 @@ export function ArchiveStudio({
           <p className={styles.kicker}>Archive studio</p>
           <h2>Shape the masthead</h2>
         </div>
-        <span className={styles.badge}>{featuredImages.length} selected</span>
+        <div className={styles.headerActions}>
+          <span className={styles.badge}>{featuredImages.length} selected</span>
+          <button className={styles.closeButton} onClick={onClose} type="button">
+            Done
+          </button>
+        </div>
       </div>
 
       <label className={styles.nameField}>
@@ -41,11 +46,7 @@ export function ArchiveStudio({
       <p className={styles.instructions}>Adjust each image with scale and position controls.</p>
 
       {featuredImages.length === 0 && (
-        <div className={styles.emptyState}>
-          {isChoosingImage
-            ? 'Choose a search result to place it in the header.'
-            : 'Use Add image to start the header.'}
-        </div>
+        <div className={styles.emptyState}>Choose a search result to place it in the header.</div>
       )}
 
       <div className={styles.editorList}>

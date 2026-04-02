@@ -129,5 +129,19 @@ describe('SearchResults', () => {
     await user.click(screen.getByRole('button', { name: /use sunset at the beach in header/i }));
 
     expect(onToggleFeaturedAsset).toHaveBeenCalledWith(SAMPLE_RESULTS[0]);
+
+    rerender(
+      <SearchResults
+        canAddMoreFeatured={true}
+        featuredAssetIds={['1']}
+        isChoosingHeaderImage={false}
+        onSelectAsset={vi.fn()}
+        onToggleFeaturedAsset={onToggleFeaturedAsset}
+        results={SAMPLE_RESULTS}
+        total={2}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /remove sunset at the beach from header/i })).not.toBeInTheDocument();
   });
 });

@@ -26,7 +26,7 @@ export function SearchResults({
       <div className={styles.grid}>
         {results.map((item) => {
           const isFeatured = featuredAssetIds.includes(item.id);
-          const showHeaderAction = isChoosingHeaderImage || isFeatured;
+          const showHeaderAction = isChoosingHeaderImage;
           return (
             <article className={styles.card} key={item.id}>
               <button
