@@ -21,10 +21,20 @@
   overflow: hidden;
   background: #fff;
   transition: box-shadow 0.15s;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  color: inherit;
 }
 
 .card:hover {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.card:focus-visible {
+  outline: 3px solid rgba(106, 27, 154, 0.35);
+  outline-offset: 2px;
 }
 
 .thumbnail {

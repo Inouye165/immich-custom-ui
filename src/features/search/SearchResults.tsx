@@ -2,17 +2,23 @@ import type { SearchResult } from '../../types';
 import styles from './SearchResults.module.css';
 
 interface SearchResultsProps {
+  onSelectAsset: (result: SearchResult) => void;
   results: SearchResult[];
   total: number;
 }
 
-export function SearchResults({ results, total }: SearchResultsProps) {
+export function SearchResults({ onSelectAsset, results, total }: SearchResultsProps) {
   return (
     <section className={styles.container} aria-label="Search results">
       <p className={styles.summary}>{total} result{total !== 1 ? 's' : ''} found</p>
       <div className={styles.grid}>
         {results.map((item) => (
-          <article key={item.id} className={styles.card}>
+          <button
+            className={styles.card}
+            key={item.id}
+            onClick={() => onSelectAsset(item)}
+            type="button"
+          >
             <img
               src={item.thumbnailUrl}
               alt={item.title}
@@ -28,7 +34,7 @@ export function SearchResults({ results, total }: SearchResultsProps) {
                 <p className={styles.description}>{item.description}</p>
               )}
             </div>
-          </article>
+          </button>
         ))}
       </div>
     </section>

@@ -22,6 +22,8 @@ afterEach(() => {
 
 function createGatewayStub(overrides: Partial<ImmichGateway>): ImmichGateway {
   return {
+    getAssetInfo: vi.fn(),
+    getAssetMetadata: vi.fn(),
     searchSmart: vi.fn(),
     fetchThumbnail: vi.fn(),
     ...overrides,
@@ -45,6 +47,8 @@ describe('server app', () => {
   it('rejects invalid date ranges', async () => {
     const app = createApp({
       immichGateway: createGatewayStub({
+        getAssetInfo: vi.fn(),
+        getAssetMetadata: vi.fn(),
         searchSmart: vi.fn(),
         fetchThumbnail: vi.fn(),
       }),
@@ -81,6 +85,8 @@ describe('server app', () => {
           ],
         },
       }),
+      getAssetInfo: vi.fn(),
+      getAssetMetadata: vi.fn(),
       fetchThumbnail: vi.fn(),
     });
 
@@ -99,6 +105,8 @@ describe('server app', () => {
   it('returns a friendly upstream auth error', async () => {
     const app = createApp({
       immichGateway: createGatewayStub({
+        getAssetInfo: vi.fn(),
+        getAssetMetadata: vi.fn(),
         searchSmart: vi.fn().mockRejectedValue(new UpstreamHttpError(401, 'Immich rejected the configured API key.')),
         fetchThumbnail: vi.fn(),
       }),
