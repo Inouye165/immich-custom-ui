@@ -2,8 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  max-width: 600px;
-  margin: 0 auto;
+  max-width: 100%;
 }
 
 .field {
@@ -15,21 +14,22 @@
 .field label {
   font-weight: 600;
   font-size: 0.875rem;
-  color: #333;
+  color: #4f4839;
 }
 
 .field input {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(184, 151, 72, 0.35);
+  border-radius: 12px;
   font-size: 1rem;
   transition: border-color 0.15s;
+  background: #fffef9;
 }
 
 .field input:focus {
   outline: none;
-  border-color: #6a1b9a;
-  box-shadow: 0 0 0 2px rgba(106, 27, 154, 0.2);
+  border-color: #0e8d96;
+  box-shadow: 0 0 0 2px rgba(14, 141, 150, 0.15);
 }
 
 .dateRow {
@@ -49,10 +49,10 @@
 
 .button {
   padding: 0.625rem 1.5rem;
-  background: #6a1b9a;
-  color: #fff;
+  background: linear-gradient(180deg, #d7a82c 0%, #be8b14 100%);
+  color: #fffaf0;
   border: none;
-  border-radius: 6px;
+  border-radius: 999px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
@@ -60,10 +60,16 @@
 }
 
 .button:hover:not(:disabled) {
-  background: #8e24aa;
+  background: linear-gradient(180deg, #e0b84a 0%, #c49420 100%);
 }
 
 .button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .dateRow {
+    flex-direction: column;
+  }
 }

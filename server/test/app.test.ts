@@ -40,7 +40,7 @@ describe('server app', () => {
 
     expect(response.status).toBe(500);
     expect(response.body.message).toBe(
-      'Server is not configured for Immich search. Set IMMICH_BASE_URL and IMMICH_API_KEY.',
+      'Server search is not configured. Set IMMICH_BASE_URL and IMMICH_API_KEY.',
     );
   });
 
@@ -107,7 +107,7 @@ describe('server app', () => {
       immichGateway: createGatewayStub({
         getAssetInfo: vi.fn(),
         getAssetMetadata: vi.fn(),
-        searchSmart: vi.fn().mockRejectedValue(new UpstreamHttpError(401, 'Immich rejected the configured API key.')),
+        searchSmart: vi.fn().mockRejectedValue(new UpstreamHttpError(401, 'The photo library rejected the configured API key.')),
         fetchThumbnail: vi.fn(),
       }),
     });
@@ -115,6 +115,6 @@ describe('server app', () => {
     const response = await request(app).post('/api/search').send({ query: 'sunset' });
 
     expect(response.status).toBe(502);
-    expect(response.body.message).toBe('Immich credentials were rejected. Check IMMICH_API_KEY.');
+    expect(response.body.message).toBe('Photo library credentials were rejected. Check IMMICH_API_KEY.');
   });
 });

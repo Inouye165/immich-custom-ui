@@ -8,7 +8,7 @@ Simple React + TypeScript search UI for a local Immich instance. The browser nev
 2. Set `IMMICH_BASE_URL` to your Immich server URL.
 3. Set `IMMICH_API_KEY` to a valid Immich API key.
 4. Run `npm install`.
-5. Run `npm run dev`.
+5. Run `npm run startup`.
 
 The frontend runs through Vite and the backend proxy runs on port `3001`. During development, Vite proxies `/api/*` requests to the backend.
 
@@ -21,8 +21,21 @@ Click any search result to open a right-side asset details panel. The panel load
 - nearby points of interest from OpenStreetMap via Overpass
 - historical weather from Open-Meteo
 - an optional Gemini summary generated server-side when enabled
+- context status indicators showing whether POI, weather, and AI summary data came from a live request, memory cache, disk cache, or fallback path
 
 If a photo does not include GPS metadata, the panel still renders metadata and shows a graceful no-location state. If POI or weather enrichment fails, the rest of the panel stays usable and surfaces a non-blocking warning.
+
+## Archive masthead editor
+
+The app now includes a branded archive header inspired by the visual direction in the reference mockup.
+
+- Rename the archive directly from the Archive Studio panel.
+- Add photos from search results into the masthead.
+- Start with one featured image and grow up to eight.
+- Adjust each featured image with scale and position controls so the crop sits exactly where you want it.
+- Archive preferences persist locally in browser storage.
+
+The search grid keeps the archive workflow separate from asset details: clicking a card opens details, while the archive button on each card adds or removes it from the masthead editor.
 
 ## Environment variables
 
@@ -46,10 +59,14 @@ Notes:
 - No weather API key is required when using Open-Meteo.
 - Gemini, weather, and POI calls are made server-side only. The browser never receives those secret keys.
 - The map and POI experience works without exposing secrets to the browser.
+- API responses from Immich and third-party enrichments are cached to reduce repeated upstream calls.
+- Persistent external API cache files are stored under `.runtime/api-cache` and survive app restarts unless you delete them.
 
 ## Commands
 
 - `npm run dev`: run the frontend and backend together
+- `npm run startup`: start the app with Docker-aware startup checks and readiness waits
+- `npm run shutdown`: stop the app process tree and any compose services started by the startup script
 - `npm run build`: type-check the frontend and backend, then build the frontend
 - `npm run lint`: run ESLint
 - `npm run test`: run the test suite

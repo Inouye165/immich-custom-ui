@@ -23,7 +23,17 @@ const SAMPLE_RESULTS: SearchResult[] = [
 
 describe('SearchResults', () => {
   it('renders result cards with titles and descriptions', () => {
-    render(<SearchResults onSelectAsset={vi.fn()} results={SAMPLE_RESULTS} total={2} />);
+    render(
+      <SearchResults
+        canAddMoreFeatured={true}
+        featuredAssetIds={[]}
+        isChoosingHeaderImage={false}
+        onSelectAsset={vi.fn()}
+        onToggleFeaturedAsset={vi.fn()}
+        results={SAMPLE_RESULTS}
+        total={2}
+      />,
+    );
 
     expect(screen.getByText('Sunset at the beach')).toBeInTheDocument();
     expect(screen.getByText('Mountain hike')).toBeInTheDocument();
@@ -32,7 +42,17 @@ describe('SearchResults', () => {
   });
 
   it('renders images with alt text', () => {
-    render(<SearchResults onSelectAsset={vi.fn()} results={SAMPLE_RESULTS} total={2} />);
+    render(
+      <SearchResults
+        canAddMoreFeatured={true}
+        featuredAssetIds={[]}
+        isChoosingHeaderImage={false}
+        onSelectAsset={vi.fn()}
+        onToggleFeaturedAsset={vi.fn()}
+        results={SAMPLE_RESULTS}
+        total={2}
+      />,
+    );
 
     const images = screen.getAllByRole('img');
     expect(images).toHaveLength(2);
@@ -40,7 +60,17 @@ describe('SearchResults', () => {
   });
 
   it('uses singular "result" for count of 1', () => {
-    render(<SearchResults onSelectAsset={vi.fn()} results={[SAMPLE_RESULTS[0]]} total={1} />);
+    render(
+      <SearchResults
+        canAddMoreFeatured={true}
+        featuredAssetIds={[]}
+        isChoosingHeaderImage={false}
+        onSelectAsset={vi.fn()}
+        onToggleFeaturedAsset={vi.fn()}
+        results={[SAMPLE_RESULTS[0]]}
+        total={1}
+      />,
+    );
 
     expect(screen.getByText('1 result found')).toBeInTheDocument();
   });
@@ -49,10 +79,55 @@ describe('SearchResults', () => {
     const user = userEvent.setup();
     const onSelectAsset = vi.fn();
 
-    render(<SearchResults onSelectAsset={onSelectAsset} results={SAMPLE_RESULTS} total={2} />);
+    render(
+      <SearchResults
+        canAddMoreFeatured={true}
+        featuredAssetIds={[]}
+        isChoosingHeaderImage={false}
+        onSelectAsset={onSelectAsset}
+        onToggleFeaturedAsset={vi.fn()}
+        results={SAMPLE_RESULTS}
+        total={2}
+      />,
+    );
 
-    await user.click(screen.getByRole('button', { name: /sunset at the beach/i }));
+    await user.click(screen.getByRole('button', { name: /open details for sunset at the beach/i }));
 
     expect(onSelectAsset).toHaveBeenCalledWith(SAMPLE_RESULTS[0]);
+  });
+
+  it('shows header actions only while choosing an image', async () => {
+    const user = userEvent.setup();
+    const onToggleFeaturedAsset = vi.fn();
+
+    const { rerender } = render(
+      <SearchResults
+        canAddMoreFeatured={true}
+        featuredAssetIds={[]}
+        isChoosingHeaderImage={false}
+        onSelectAsset={vi.fn()}
+        onToggleFeaturedAsset={onToggleFeaturedAsset}
+        results={SAMPLE_RESULTS}
+        total={2}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /use sunset at the beach in header/i })).not.toBeInTheDocument();
+
+    rerender(
+      <SearchResults
+        canAddMoreFeatured={true}
+        featuredAssetIds={[]}
+        isChoosingHeaderImage={true}
+        onSelectAsset={vi.fn()}
+        onToggleFeaturedAsset={onToggleFeaturedAsset}
+        results={SAMPLE_RESULTS}
+        total={2}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /use sunset at the beach in header/i }));
+
+    expect(onToggleFeaturedAsset).toHaveBeenCalledWith(SAMPLE_RESULTS[0]);
   });
 });

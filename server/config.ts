@@ -50,7 +50,7 @@ export function getServerConfig(): ServerConfig {
 
   if (!parsed.IMMICH_BASE_URL || !parsed.IMMICH_API_KEY) {
     throw new ConfigurationError(
-      'Server is not configured for Immich search. Set IMMICH_BASE_URL and IMMICH_API_KEY.',
+      'Server search is not configured. Set IMMICH_BASE_URL and IMMICH_API_KEY.',
     );
   }
 

@@ -1,12 +1,16 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
 import type { AssetContextService, SearchService } from '../services';
 
 vi.mock('../features/assets/AssetLocationMap', () => ({
   AssetLocationMap: () => <div data-testid="asset-location-map" />,
 }));
+
+afterEach(() => {
+  window.localStorage.clear();
+});
 
 function createSearchService(overrides: Partial<SearchService>): SearchService {
   return {
@@ -103,6 +107,11 @@ function buildAssetContext(overrides: Record<string, unknown> = {}) {
     },
     aiSummary: null,
     aiSummaryAvailable: true,
+    status: {
+      aiSummary: 'unavailable',
+      pois: 'live',
+      weather: 'live',
+    },
     warnings: [],
     ...overrides,
   };
@@ -129,12 +138,13 @@ describe('App', () => {
 
     expect(await screen.findByText('beach.jpg')).toBeInTheDocument();
     expect(screen.getByText('1 result found')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'The Hearthside Archive' })).toBeInTheDocument();
   });
 
   it('renders a friendly error when the backend search fails', async () => {
     const user = userEvent.setup();
     const searchService = createSearchService({
-      search: vi.fn().mockRejectedValue(new Error('Immich search is unavailable right now.')),
+      search: vi.fn().mockRejectedValue(new Error('Search is unavailable right now.')),
     });
     const assetContextService = createAssetContextService({
       getAssetContext: vi.fn(),
@@ -145,7 +155,7 @@ describe('App', () => {
     await user.type(screen.getByLabelText('Search'), 'beach');
     await user.click(screen.getByRole('button', { name: 'Search' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Immich search is unavailable right now.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Search is unavailable right now.');
   });
 
   it('opens asset details and renders metadata when a result is clicked', async () => {
@@ -160,10 +170,11 @@ describe('App', () => {
     render(<App assetContextService={assetContextService} searchService={searchService} />);
 
     await performSearch(user);
-    await user.click(screen.getByRole('button', { name: /beach.jpg/i }));
+    await user.click(screen.getByRole('button', { name: /open details for beach.jpg/i }));
 
     expect(await screen.findByRole('dialog', { name: 'beach.jpg' })).toBeInTheDocument();
     expect(screen.getByText('Metadata')).toBeInTheDocument();
+    expect(screen.getByText('Context status')).toBeInTheDocument();
     expect(screen.getByText('Sony A7C')).toBeInTheDocument();
     expect(screen.getByText('4032 × 3024')).toBeInTheDocument();
   });
@@ -187,7 +198,7 @@ describe('App', () => {
     render(<App assetContextService={assetContextService} searchService={searchService} />);
 
     await performSearch(user);
-    await user.click(screen.getByRole('button', { name: /beach.jpg/i }));
+    await user.click(screen.getByRole('button', { name: /open details for beach.jpg/i }));
 
     expect(await screen.findByText('No GPS location available.')).toBeInTheDocument();
   });
@@ -204,11 +215,33 @@ describe('App', () => {
     render(<App assetContextService={assetContextService} searchService={searchService} />);
 
     await performSearch(user);
-    await user.click(screen.getByRole('button', { name: /beach.jpg/i }));
+    await user.click(screen.getByRole('button', { name: /open details for beach.jpg/i }));
 
-    expect(await screen.findByText('Weather')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Weather' })).toBeInTheDocument();
     expect(screen.getByText('20C / 68F')).toBeInTheDocument();
     expect(screen.getByText('Mostly clear')).toBeInTheDocument();
+  });
+
+  it('lets the user add a result to the archive masthead and rename it', async () => {
+    const user = userEvent.setup();
+    const searchService = createSearchService({
+      search: vi.fn().mockResolvedValue(SEARCH_RESPONSE),
+    });
+    const assetContextService = createAssetContextService({
+      getAssetContext: vi.fn().mockResolvedValue(buildAssetContext()),
+    });
+
+    render(<App assetContextService={assetContextService} searchService={searchService} />);
+
+    await performSearch(user);
+    await user.click(screen.getByRole('button', { name: 'Add image' }));
+    await user.click(screen.getByRole('button', { name: /use beach.jpg in header/i }));
+    await user.clear(screen.getByLabelText('Archive name'));
+    await user.type(screen.getByLabelText('Archive name'), 'Yellowstone Keepsakes');
+
+    expect(screen.getByRole('heading', { name: 'Yellowstone Keepsakes' })).toBeInTheDocument();
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /remove beach.jpg from header/i })).toBeInTheDocument();
   });
 
   it('hides the AI summary section when no summary is available', async () => {
@@ -227,7 +260,7 @@ describe('App', () => {
     render(<App assetContextService={assetContextService} searchService={searchService} />);
 
     await performSearch(user);
-    await user.click(screen.getByRole('button', { name: /beach.jpg/i }));
+    await user.click(screen.getByRole('button', { name: /open details for beach.jpg/i }));
 
     expect(await screen.findByText('Metadata')).toBeInTheDocument();
     expect(screen.queryByText('About this photo')).not.toBeInTheDocument();

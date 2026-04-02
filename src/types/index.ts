@@ -1,4 +1,5 @@
 export type { SearchRequest, SearchResult, SearchResponse } from './search';
+export type { ArchiveFeaturedImage, ArchivePreferences } from './archive';
 export type {
 	AssetContextResponse,
 	AssetDetails,

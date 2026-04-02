@@ -1,8 +1,16 @@
-import { useRef, useState } from 'react';
-import type { SearchRequest, SearchResult } from './types';
+import { useEffect, useRef, useState } from 'react';
+import type { ArchiveFeaturedImage, SearchRequest, SearchResult } from './types';
 import { ApiAssetContextService, ApiSearchService } from './services';
 import type { AssetContextService, SearchService } from './services';
 import type { AssetContextResponse } from './types';
+import {
+  ArchiveHero,
+  ArchiveStudio,
+  DEFAULT_ARCHIVE_NAME,
+  MAX_ARCHIVE_IMAGES,
+  loadArchivePreferences,
+  saveArchivePreferences,
+} from './features/archive';
 import { SearchForm, SearchResults } from './features/search';
 import { AssetDetailsPanel } from './features/assets';
 import { EmptyState, ErrorBanner } from './components';
@@ -23,6 +31,12 @@ function App({
   searchService = defaultSearchService,
 }: AppProps) {
   const assetRequestRef = useRef(0);
+  const [archiveName, setArchiveName] = useState(
+    () => loadArchivePreferences().name || DEFAULT_ARCHIVE_NAME,
+  );
+  const [featuredImages, setFeaturedImages] = useState<ArchiveFeaturedImage[]>(
+    () => loadArchivePreferences().featuredImages,
+  );
   const [results, setResults] = useState<SearchResult[]>([]);
   const [total, setTotal] = useState(0);
   const [state, setState] = useState<SearchState>('idle');
@@ -31,8 +45,16 @@ function App({
   const [assetErrorMsg, setAssetErrorMsg] = useState('');
   const [isAssetLoading, setIsAssetLoading] = useState(false);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+  const [isChoosingHeaderImage, setIsChoosingHeaderImage] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<SearchResult | null>(null);
   const [showAiUnavailable, setShowAiUnavailable] = useState(false);
+
+  useEffect(() => {
+    saveArchivePreferences({
+      featuredImages,
+      name: archiveName.trim() || DEFAULT_ARCHIVE_NAME,
+    });
+  }, [archiveName, featuredImages]);
 
   const handleSearch = async (request: SearchRequest) => {
     setState('loading');
@@ -103,7 +125,9 @@ function App({
         current
           ? {
               ...current,
-              warnings: [...current.warnings, message],
+              warnings: current.warnings.includes(message)
+                ? current.warnings
+                : [...current.warnings, message],
             }
           : current,
       );
@@ -123,14 +147,70 @@ function App({
     setShowAiUnavailable(false);
   };
 
+  const handleArchiveNameChange = (value: string) => {
+    setArchiveName(value);
+  };
+
+  const handleToggleFeaturedAsset = (asset: SearchResult) => {
+    setFeaturedImages((current) => {
+      const existing = current.find((item) => item.id === asset.id);
+      if (existing) {
+        return current.filter((item) => item.id !== asset.id);
+      }
+
+      if (current.length >= MAX_ARCHIVE_IMAGES) {
+        return current;
+      }
+
+      return [
+        ...current,
+        {
+          id: asset.id,
+          offsetX: 0,
+          offsetY: 0,
+          scale: 1,
+          thumbnailUrl: asset.thumbnailUrl,
+          title: asset.title,
+        },
+      ];
+    });
+    setIsChoosingHeaderImage(false);
+  };
+
+  const handleRemoveFeaturedAsset = (assetId: string) => {
+    setFeaturedImages((current) => current.filter((item) => item.id !== assetId));
+  };
+
+  const handleUpdateFeaturedAsset = (assetId: string, update: Partial<ArchiveFeaturedImage>) => {
+    setFeaturedImages((current) =>
+      current.map((item) => (item.id === assetId ? { ...item, ...update } : item)),
+    );
+  };
+
   return (
     <div className={styles.app}>
-      <header className={styles.header}>
-        <h1>Immich Search</h1>
-      </header>
+      <ArchiveHero
+        featuredImages={featuredImages}
+        isChoosingImage={isChoosingHeaderImage}
+        name={archiveName.trim() || DEFAULT_ARCHIVE_NAME}
+        onChooseImage={() => setIsChoosingHeaderImage((current) => !current)}
+      />
 
       <main className={styles.main}>
-        <SearchForm onSearch={handleSearch} isLoading={state === 'loading'} />
+        <div className={styles.controlGrid}>
+          <section className={styles.panelCard}>
+            <SearchForm onSearch={handleSearch} isLoading={state === 'loading'} />
+          </section>
+
+          <ArchiveStudio
+            featuredImages={featuredImages}
+            isChoosingImage={isChoosingHeaderImage}
+            name={archiveName}
+            onArchiveNameChange={handleArchiveNameChange}
+            onRemoveImage={handleRemoveFeaturedAsset}
+            onUpdateImage={handleUpdateFeaturedAsset}
+          />
+        </div>
 
         {state === 'error' && <ErrorBanner message={errorMsg} />}
 
@@ -143,7 +223,15 @@ function App({
         )}
 
         {state === 'success' && results.length > 0 && (
-          <SearchResults onSelectAsset={handleSelectAsset} results={results} total={total} />
+          <SearchResults
+            canAddMoreFeatured={featuredImages.length < MAX_ARCHIVE_IMAGES}
+            featuredAssetIds={featuredImages.map((image) => image.id)}
+            isChoosingHeaderImage={isChoosingHeaderImage}
+            onSelectAsset={handleSelectAsset}
+            onToggleFeaturedAsset={handleToggleFeaturedAsset}
+            results={results}
+            total={total}
+          />
         )}
 
         {state === 'idle' && (

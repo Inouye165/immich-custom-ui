@@ -27,39 +27,53 @@ export async function buildAssetContext(
 
   let pois = [] as AssetContextResponse['pois'];
   let weather = null as AssetContextResponse['weather'];
+  let poiStatus: AssetContextResponse['status']['pois'] = 'unavailable';
+  let weatherStatus: AssetContextResponse['status']['weather'] = 'unavailable';
 
   if (gps) {
     try {
-      pois = await options.poiService.getNearbyPois(gps);
+      const poiResult = await options.poiService.getNearbyPois(gps);
+      pois = poiResult.value;
+      poiStatus = poiResult.source;
     } catch {
+      poiStatus = 'fallback';
       warnings.push('Nearby points of interest are unavailable right now.');
     }
 
     const timestamp = normalizeAssetTimestamp(options.assetInfo);
     if (timestamp) {
       try {
-        weather = await options.weatherService.getHistoricalWeather({
+        const weatherResult = await options.weatherService.getHistoricalWeather({
           latitude: gps.latitude,
           longitude: gps.longitude,
           timestamp,
         });
+        weather = weatherResult.value;
+        weatherStatus = weatherResult.source;
       } catch {
+        weatherStatus = 'fallback';
         warnings.push('Historical weather is unavailable right now.');
       }
     }
   }
 
   let aiSummary = null;
+  let aiSummaryStatus: AssetContextResponse['status']['aiSummary'] = options.aiSummaryService.isEnabled()
+    ? 'unavailable'
+    : 'disabled';
   if (options.includeAiSummary && options.aiSummaryService.isEnabled()) {
     try {
-      aiSummary = await options.aiSummaryService.summarizePhotoContext({
+      const aiSummaryResult = await options.aiSummaryService.summarizePhotoContext({
         asset,
         metadata,
         gps,
         pois,
         weather,
       });
+      aiSummary = aiSummaryResult.value;
+      aiSummaryStatus = aiSummaryResult.source;
     } catch {
+      aiSummaryStatus = 'fallback';
       warnings.push('AI summary is unavailable right now.');
     }
   }
@@ -78,6 +92,11 @@ export async function buildAssetContext(
     weather,
     aiSummary,
     aiSummaryAvailable: options.aiSummaryService.isEnabled(),
+    status: {
+      aiSummary: aiSummaryStatus,
+      pois: poiStatus,
+      weather: weatherStatus,
+    },
     warnings,
   };
 }
