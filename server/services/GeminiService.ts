@@ -6,6 +6,8 @@ import type {
   NearbyPoi,
 } from '../../src/types';
 import type { ServerConfig } from '../config';
+import type { CacheLookupResult } from './PersistentCache';
+import { PersistentCache } from './PersistentCache';
 import { fetchJsonWithTimeout } from './requestUtils';
 
 const GEMINI_TIMEOUT_MS = 7000;
@@ -30,7 +32,7 @@ interface GeminiResponse {
 
 export interface AiSummaryService {
   isEnabled(): boolean;
-  summarizePhotoContext(input: GeminiSummaryInput): Promise<string | null>;
+  summarizePhotoContext(input: GeminiSummaryInput): Promise<CacheLookupResult<string | null>>;
 }
 
 export class DisabledAiSummaryService implements AiSummaryService {
@@ -38,13 +40,18 @@ export class DisabledAiSummaryService implements AiSummaryService {
     return false;
   }
 
-  async summarizePhotoContext(): Promise<string | null> {
-    return null;
+  async summarizePhotoContext(): Promise<CacheLookupResult<string | null>> {
+    return {
+      source: 'live',
+      value: null,
+    };
   }
 }
 
 export class LiveGeminiSummaryService implements AiSummaryService {
   private readonly apiKey: string;
+
+  private readonly cache = new PersistentCache<string | null>('gemini-summaries', 7 * 24 * 60 * 60 * 1000);
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
@@ -54,40 +61,43 @@ export class LiveGeminiSummaryService implements AiSummaryService {
     return true;
   }
 
-  async summarizePhotoContext(input: GeminiSummaryInput): Promise<string | null> {
-    const payload = await fetchJsonWithTimeout<GeminiResponse>(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(this.apiKey)}`,
-      {
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: buildPrompt(input),
-                },
-              ],
+  async summarizePhotoContext(input: GeminiSummaryInput): Promise<CacheLookupResult<string | null>> {
+    const prompt = buildPrompt(input);
+    return this.cache.getOrCreate(prompt, async () => {
+      const payload = await fetchJsonWithTimeout<GeminiResponse>(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(this.apiKey)}`,
+        {
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: prompt,
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              maxOutputTokens: 160,
+              temperature: 0.2,
             },
-          ],
-          generationConfig: {
-            maxOutputTokens: 160,
-            temperature: 0.2,
+          }),
+          headers: {
+            'content-type': 'application/json',
           },
-        }),
-        headers: {
-          'content-type': 'application/json',
+          method: 'POST',
+          operation: 'Gemini summary generation',
+          timeoutMs: GEMINI_TIMEOUT_MS,
         },
-        method: 'POST',
-        operation: 'Gemini summary generation',
-        timeoutMs: GEMINI_TIMEOUT_MS,
-      },
-    );
+      );
 
-    const summary = payload.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text?.trim() ?? '')
-      .join(' ')
-      .trim();
+      const summary = payload.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text?.trim() ?? '')
+        .join(' ')
+        .trim();
 
-    return summary || null;
+      return summary || null;
+    });
   }
 }
 

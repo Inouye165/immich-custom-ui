@@ -1,3 +1,11 @@
+export type DataSourceState =
+  | 'disabled'
+  | 'disk-cache'
+  | 'fallback'
+  | 'live'
+  | 'memory-cache'
+  | 'unavailable';
+
 export interface AssetPoint {
   latitude: number;
   longitude: number;
@@ -79,5 +87,10 @@ export interface AssetContextResponse {
   weather: AssetWeather | null;
   aiSummary: string | null;
   aiSummaryAvailable: boolean;
+  status: {
+    aiSummary: DataSourceState;
+    pois: DataSourceState;
+    weather: DataSourceState;
+  };
   warnings: string[];
 }

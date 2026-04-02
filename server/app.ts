@@ -173,7 +173,7 @@ function handleError(error: unknown, res: Response) {
 
   if (error instanceof UpstreamHttpError) {
     if (error.status === 401 || error.status === 403) {
-      res.status(502).json({ message: 'Immich credentials were rejected. Check IMMICH_API_KEY.' });
+      res.status(502).json({ message: 'Photo library credentials were rejected. Check IMMICH_API_KEY.' });
       return;
     }
 
