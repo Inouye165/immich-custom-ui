@@ -7,6 +7,7 @@
     linear-gradient(135deg, #0e8d96 0%, #17828d 45%, #0e6870 100%);
   color: #fff9e8;
   padding: 2.75rem 1.5rem 1.75rem;
+  cursor: context-menu;
 }
 
 .patternLayer span {
@@ -49,57 +50,24 @@
   justify-content: center;
   gap: 1rem;
   flex-wrap: wrap;
+  min-height: 6rem;
   margin-top: 1.4rem;
 }
 
 .medallion,
-.addImageButton,
-.secondaryAction {
+.emptyMedallion {
   display: grid;
   justify-items: center;
   gap: 0.4rem;
 }
 
-.addImageButton,
-.secondaryAction {
+.emptyMedallion {
   align-self: center;
-  border: 1px solid rgba(255, 248, 231, 0.36);
-  color: #fff9e8;
-  background: rgba(255, 248, 231, 0.12);
-  cursor: pointer;
-  font: inherit;
-}
-
-.addImageButton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 8rem;
-  height: 8rem;
+  width: 2.4rem;
+  height: 2.4rem;
   border-radius: 999px;
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  text-align: center;
-}
-
-.secondaryAction {
-  min-height: 3rem;
-  padding: 0.85rem 1.2rem;
-  border-radius: 999px;
-  font-weight: 600;
-}
-
-.addImageButton:hover,
-.secondaryAction:hover {
-  background: rgba(255, 248, 231, 0.2);
-}
-
-.addImageButton:focus-visible,
-.secondaryAction:focus-visible {
-  outline: 3px solid rgba(255, 248, 231, 0.4);
-  outline-offset: 4px;
+  border: 1px solid rgba(255, 248, 231, 0.28);
+  background: rgba(255, 248, 231, 0.06);
 }
 
 .medallionFrame {
@@ -128,11 +96,6 @@
 @media (max-width: 720px) {
   .hero {
     padding-top: 2.2rem;
-  }
-
-  .addImageButton {
-    width: 6.5rem;
-    height: 6.5rem;
   }
 
   .medallionFrame {

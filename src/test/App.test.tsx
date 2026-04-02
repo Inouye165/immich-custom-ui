@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
@@ -139,6 +139,7 @@ describe('App', () => {
     expect(await screen.findByText('beach.jpg')).toBeInTheDocument();
     expect(screen.getByText('1 result found')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'The Hearthside Archive' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Archive studio' })).not.toBeInTheDocument();
   });
 
   it('renders a friendly error when the backend search fails', async () => {
@@ -234,14 +235,36 @@ describe('App', () => {
     render(<App assetContextService={assetContextService} searchService={searchService} />);
 
     await performSearch(user);
-    await user.click(screen.getByRole('button', { name: 'Add image' }));
+    fireEvent.contextMenu(screen.getByRole('banner'));
+    expect(screen.getByRole('region', { name: 'Archive studio' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /use beach.jpg in header/i }));
+
+    expect(screen.queryByRole('region', { name: 'Archive studio' })).not.toBeInTheDocument();
+
+    fireEvent.contextMenu(screen.getByRole('banner'));
     await user.clear(screen.getByLabelText('Archive name'));
     await user.type(screen.getByLabelText('Archive name'), 'Yellowstone Keepsakes');
 
     expect(screen.getByRole('heading', { name: 'Yellowstone Keepsakes' })).toBeInTheDocument();
     expect(screen.getByText('1 selected')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /remove beach.jpg from header/i })).toBeInTheDocument();
+  });
+
+  it('opens and closes the archive studio from the header editing flow', async () => {
+    const user = userEvent.setup();
+    const searchService = createSearchService({
+      search: vi.fn().mockResolvedValue(SEARCH_RESPONSE),
+    });
+    const assetContextService = createAssetContextService({
+      getAssetContext: vi.fn().mockResolvedValue(buildAssetContext()),
+    });
+
+    render(<App assetContextService={assetContextService} searchService={searchService} />);
+
+    fireEvent.contextMenu(screen.getByRole('banner'));
+    expect(screen.getByRole('region', { name: 'Archive studio' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('region', { name: 'Archive studio' })).not.toBeInTheDocument();
   });
 
   it('hides the AI summary section when no summary is available', async () => {

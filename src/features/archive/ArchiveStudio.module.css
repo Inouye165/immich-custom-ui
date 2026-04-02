@@ -13,6 +13,12 @@
   gap: 1rem;
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 .kicker {
   margin: 0;
   color: #99701a;
@@ -32,6 +38,16 @@
   border-radius: 999px;
   padding: 0.35rem 0.7rem;
   font-size: 0.85rem;
+}
+
+.closeButton {
+  border: 1px solid rgba(184, 151, 72, 0.35);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  background: #fffef9;
+  color: #665f4d;
+  cursor: pointer;
+  font: inherit;
 }
 
 .nameField,
@@ -127,6 +143,7 @@
 
 @media (max-width: 720px) {
   .heading,
+  .headerActions,
   .editorHeader,
   .editorMeta {
     flex-direction: column;

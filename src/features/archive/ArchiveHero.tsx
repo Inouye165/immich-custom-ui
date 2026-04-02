@@ -3,19 +3,23 @@ import styles from './ArchiveHero.module.css';
 
 interface ArchiveHeroProps {
   featuredImages: ArchiveFeaturedImage[];
-  isChoosingImage: boolean;
   name: string;
-  onChooseImage: () => void;
+  onOpenEditor: () => void;
 }
 
 export function ArchiveHero({
   featuredImages,
-  isChoosingImage,
   name,
-  onChooseImage,
+  onOpenEditor,
 }: ArchiveHeroProps) {
   return (
-    <header className={styles.hero}>
+    <header
+      className={styles.hero}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onOpenEditor();
+      }}
+    >
       <div className={styles.patternLayer} aria-hidden="true">
         <span className={styles.sparkA} />
         <span className={styles.sparkB} />
@@ -27,15 +31,7 @@ export function ArchiveHero({
         <h1 className={styles.title}>{name}</h1>
 
         <div className={styles.medallionRow}>
-          {featuredImages.length === 0 && (
-            <button
-              className={styles.addImageButton}
-              onClick={onChooseImage}
-              type="button"
-            >
-              {isChoosingImage ? 'Cancel' : 'Add image'}
-            </button>
-          )}
+          {featuredImages.length === 0 && <span className={styles.emptyMedallion} aria-hidden="true" />}
 
           {featuredImages.map((image) => (
             <figure className={styles.medallion} key={image.id}>
@@ -52,16 +48,6 @@ export function ArchiveHero({
               <figcaption>{trimImageTitle(image.title)}</figcaption>
             </figure>
           ))}
-
-          {featuredImages.length > 0 && (
-            <button
-              className={styles.secondaryAction}
-              onClick={onChooseImage}
-              type="button"
-            >
-              {isChoosingImage ? 'Done choosing' : 'Add image'}
-            </button>
-          )}
         </div>
       </div>
     </header>

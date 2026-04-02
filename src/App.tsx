@@ -151,6 +151,14 @@ function App({
     setArchiveName(value);
   };
 
+  const openHeaderEditor = () => {
+    setIsChoosingHeaderImage(true);
+  };
+
+  const closeHeaderEditor = () => {
+    setIsChoosingHeaderImage(false);
+  };
+
   const handleToggleFeaturedAsset = (asset: SearchResult) => {
     setFeaturedImages((current) => {
       const existing = current.find((item) => item.id === asset.id);
@@ -191,9 +199,8 @@ function App({
     <div className={styles.app}>
       <ArchiveHero
         featuredImages={featuredImages}
-        isChoosingImage={isChoosingHeaderImage}
         name={archiveName.trim() || DEFAULT_ARCHIVE_NAME}
-        onChooseImage={() => setIsChoosingHeaderImage((current) => !current)}
+        onOpenEditor={openHeaderEditor}
       />
 
       <main className={styles.main}>
@@ -202,14 +209,16 @@ function App({
             <SearchForm onSearch={handleSearch} isLoading={state === 'loading'} />
           </section>
 
-          <ArchiveStudio
-            featuredImages={featuredImages}
-            isChoosingImage={isChoosingHeaderImage}
-            name={archiveName}
-            onArchiveNameChange={handleArchiveNameChange}
-            onRemoveImage={handleRemoveFeaturedAsset}
-            onUpdateImage={handleUpdateFeaturedAsset}
-          />
+          {isChoosingHeaderImage && (
+            <ArchiveStudio
+              featuredImages={featuredImages}
+              name={archiveName}
+              onArchiveNameChange={handleArchiveNameChange}
+              onClose={closeHeaderEditor}
+              onRemoveImage={handleRemoveFeaturedAsset}
+              onUpdateImage={handleUpdateFeaturedAsset}
+            />
+          )}
         </div>
 
         {state === 'error' && <ErrorBanner message={errorMsg} />}
