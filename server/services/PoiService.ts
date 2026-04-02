@@ -1,11 +1,17 @@
 import type { NearbyPoi } from '../../src/types';
 import type { ServerConfig } from '../config';
-import { TimedCache } from './TimedCache';
+import type { CacheLookupResult } from './PersistentCache';
+import { PersistentCache } from './PersistentCache';
 import { fetchJsonWithTimeout } from './requestUtils';
 
 const POI_CACHE_TTL_MS = 15 * 60 * 1000;
-const POI_TIMEOUT_MS = 2500;
+const POI_TIMEOUT_MS = 3500;
 const MAX_POIS = 10;
+const DEFAULT_OVERPASS_BASE_URLS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+];
 const NOISY_CATEGORIES = new Set([
   'atm',
   'bench',
@@ -38,11 +44,11 @@ interface OverpassResponse {
 }
 
 export interface PoiService {
-  getNearbyPois(input: PoiLookupInput): Promise<NearbyPoi[]>;
+  getNearbyPois(input: PoiLookupInput): Promise<CacheLookupResult<NearbyPoi[]>>;
 }
 
 export class LivePoiService implements PoiService {
-  private readonly cache = new TimedCache<NearbyPoi[]>(POI_CACHE_TTL_MS);
+  private readonly cache = new PersistentCache<NearbyPoi[]>('nearby-pois', POI_CACHE_TTL_MS);
 
   private readonly config: Pick<ServerConfig, 'mapPoiRadiusMeters' | 'overpassBaseUrl'>;
 
@@ -50,7 +56,7 @@ export class LivePoiService implements PoiService {
     this.config = config;
   }
 
-  async getNearbyPois(input: PoiLookupInput): Promise<NearbyPoi[]> {
+  async getNearbyPois(input: PoiLookupInput): Promise<CacheLookupResult<NearbyPoi[]>> {
     const cacheKey = [
       input.latitude.toFixed(4),
       input.longitude.toFixed(4),
@@ -67,21 +73,30 @@ export class LivePoiService implements PoiService {
       this.config.mapPoiRadiusMeters,
     );
 
-    const payload = await fetchJsonWithTimeout<OverpassResponse>(this.config.overpassBaseUrl, {
-      body: query,
-      headers: {
-        'content-type': 'text/plain;charset=UTF-8',
-      },
-      method: 'POST',
-      operation: 'Nearby POI lookup',
-      timeoutMs: POI_TIMEOUT_MS,
-    });
+    let lastError: unknown;
+    for (const endpoint of getOverpassEndpoints(this.config.overpassBaseUrl)) {
+      try {
+        const payload = await fetchJsonWithTimeout<OverpassResponse>(endpoint, {
+          body: query,
+          headers: {
+            'content-type': 'text/plain;charset=UTF-8',
+          },
+          method: 'POST',
+          operation: 'Nearby POI lookup',
+          timeoutMs: POI_TIMEOUT_MS,
+        });
 
-    return (payload.elements ?? [])
-      .map((element) => normalizePoiElement(element, input.latitude, input.longitude))
-      .filter((element): element is NearbyPoi => element !== null)
-      .sort((left, right) => left.distanceMeters - right.distanceMeters)
-      .slice(0, MAX_POIS);
+        return (payload.elements ?? [])
+          .map((element) => normalizePoiElement(element, input.latitude, input.longitude))
+          .filter((element): element is NearbyPoi => element !== null)
+          .sort((left, right) => left.distanceMeters - right.distanceMeters)
+          .slice(0, MAX_POIS);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError ?? new Error('Nearby POI lookup failed.');
   }
 }
 
@@ -89,6 +104,10 @@ export function createLivePoiService(
   config: Pick<ServerConfig, 'mapPoiRadiusMeters' | 'overpassBaseUrl'>,
 ): PoiService {
   return new LivePoiService(config);
+}
+
+function getOverpassEndpoints(primaryEndpoint: string) {
+  return Array.from(new Set([primaryEndpoint, ...DEFAULT_OVERPASS_BASE_URLS]));
 }
 
 function buildOverpassQuery(latitude: number, longitude: number, radius: number) {

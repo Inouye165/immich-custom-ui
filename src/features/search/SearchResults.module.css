@@ -1,5 +1,5 @@
 .container {
-  max-width: 800px;
+  max-width: 1100px;
   margin: 2rem auto 0;
 }
 
@@ -17,22 +17,30 @@
 
 .card {
   border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  border-radius: 18px;
   overflow: hidden;
   background: #fff;
   transition: box-shadow 0.15s;
-  padding: 0;
-  text-align: left;
-  cursor: pointer;
-  width: 100%;
-  color: inherit;
+  display: flex;
+  flex-direction: column;
 }
 
 .card:hover {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
-.card:focus-visible {
+.cardButton {
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  color: inherit;
+  border: 0;
+  background: transparent;
+}
+
+.cardButton:focus-visible,
+.featureButton:focus-visible {
   outline: 3px solid rgba(106, 27, 154, 0.35);
   outline-offset: 2px;
 }
@@ -63,4 +71,24 @@
   margin: 0.5rem 0 0;
   font-size: 0.875rem;
   color: #555;
+}
+
+.actions {
+  padding: 0 0.75rem 0.75rem;
+}
+
+.featureButton {
+  width: 100%;
+  border: 1px solid #d1b250;
+  border-radius: 999px;
+  background: #fff8dc;
+  color: #5b4406;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.featureButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }

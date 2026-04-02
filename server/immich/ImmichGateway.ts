@@ -1,4 +1,5 @@
 import { ConfigurationError, getServerConfig } from '../config';
+import { CachedImmichGateway } from './CachedImmichGateway';
 import type {
   ImmichAssetInfo,
   ImmichAssetMetadata,
@@ -104,7 +105,7 @@ export class LiveImmichGateway implements ImmichGateway {
 
 export function createLiveImmichGateway(): ImmichGateway {
   const { immichBaseUrl, immichApiKey } = getServerConfig();
-  return new LiveImmichGateway(immichBaseUrl, immichApiKey);
+  return new CachedImmichGateway(new LiveImmichGateway(immichBaseUrl, immichApiKey));
 }
 
 async function buildUpstreamError(
@@ -114,18 +115,18 @@ async function buildUpstreamError(
   if (response.status === 401 || response.status === 403) {
     return new UpstreamHttpError(
       response.status,
-      'Immich rejected the configured API key.',
+      'The photo library rejected the configured API key.',
     );
   }
 
   const fallbackMessage =
     operation === 'search'
-      ? 'Immich search is unavailable right now.'
+      ? 'Search is unavailable right now.'
       : operation === 'thumbnail'
-        ? 'Immich thumbnail retrieval is unavailable right now.'
+        ? 'Thumbnail retrieval is unavailable right now.'
         : operation === 'asset-info'
-          ? 'Immich asset details are unavailable right now.'
-          : 'Immich asset metadata is unavailable right now.';
+          ? 'Asset details are unavailable right now.'
+          : 'Asset metadata is unavailable right now.';
 
   try {
     const body = (await response.json()) as { message?: string };

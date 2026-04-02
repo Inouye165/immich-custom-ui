@@ -56,16 +56,19 @@ function createGatewayStub(overrides: Partial<ImmichGateway>): ImmichGateway {
 
 function createPoiService(overrides: Partial<PoiService> = {}): PoiService {
   return {
-    getNearbyPois: vi.fn().mockResolvedValue([
-      {
-        id: 'node-1',
-        name: 'Pike Place Market',
-        category: 'Tourism',
-        latitude: 47.6097,
-        longitude: -122.3425,
-        distanceMeters: 821,
-      },
-    ]),
+    getNearbyPois: vi.fn().mockResolvedValue({
+      source: 'live',
+      value: [
+        {
+          id: 'node-1',
+          name: 'Pike Place Market',
+          category: 'Tourism',
+          latitude: 47.6097,
+          longitude: -122.3425,
+          distanceMeters: 821,
+        },
+      ],
+    }),
     ...overrides,
   };
 }
@@ -73,16 +76,19 @@ function createPoiService(overrides: Partial<PoiService> = {}): PoiService {
 function createWeatherService(overrides: Partial<WeatherService> = {}): WeatherService {
   return {
     getHistoricalWeather: vi.fn().mockResolvedValue({
-      temperatureC: 20,
-      temperatureF: 68,
-      apparentTemperatureC: 21,
-      apparentTemperatureF: 69.8,
-      weatherCode: 1,
-      weatherLabel: 'Mostly clear',
-      observedAt: '2024-08-15T19:00:00',
-      isApproximate: false,
-      source: 'open-meteo',
-      summary: null,
+      source: 'live',
+      value: {
+        temperatureC: 20,
+        temperatureF: 68,
+        apparentTemperatureC: 21,
+        apparentTemperatureF: 69.8,
+        weatherCode: 1,
+        weatherLabel: 'Mostly clear',
+        observedAt: '2024-08-15T19:00:00',
+        isApproximate: false,
+        source: 'open-meteo',
+        summary: null,
+      },
     }),
     ...overrides,
   };
@@ -91,7 +97,10 @@ function createWeatherService(overrides: Partial<WeatherService> = {}): WeatherS
 function createAiSummaryService(overrides: Partial<AiSummaryService> = {}): AiSummaryService {
   return {
     isEnabled: vi.fn().mockReturnValue(true),
-    summarizePhotoContext: vi.fn().mockResolvedValue('Taken in Seattle near Pike Place Market on a mostly clear evening.'),
+    summarizePhotoContext: vi.fn().mockResolvedValue({
+      source: 'live',
+      value: 'Taken in Seattle near Pike Place Market on a mostly clear evening.',
+    }),
     ...overrides,
   };
 }
@@ -118,6 +127,11 @@ describe('asset context route', () => {
     expect(response.body.pois).toHaveLength(1);
     expect(response.body.weather.weatherLabel).toBe('Mostly clear');
     expect(response.body.aiSummary).toContain('Seattle');
+    expect(response.body.status).toEqual({
+      aiSummary: 'live',
+      pois: 'live',
+      weather: 'live',
+    });
     expect(response.body.warnings).toEqual([]);
   });
 
@@ -147,6 +161,11 @@ describe('asset context route', () => {
     expect(response.body.map).toBeNull();
     expect(response.body.pois).toEqual([]);
     expect(response.body.weather).toBeNull();
+    expect(response.body.status).toEqual({
+      aiSummary: 'unavailable',
+      pois: 'unavailable',
+      weather: 'unavailable',
+    });
   });
 
   it('keeps the rest of the asset context when weather lookup fails', async () => {
@@ -157,7 +176,10 @@ describe('asset context route', () => {
         getHistoricalWeather: vi.fn().mockRejectedValue(new Error('timeout')),
       }),
       aiSummaryService: createAiSummaryService({
-        summarizePhotoContext: vi.fn().mockResolvedValue(null),
+        summarizePhotoContext: vi.fn().mockResolvedValue({
+          source: 'live',
+          value: null,
+        }),
       }),
       serverConfig: SAMPLE_CONFIG,
     });
@@ -168,6 +190,7 @@ describe('asset context route', () => {
     expect(response.body.gps).toEqual({ latitude: 47.6062, longitude: -122.3321 });
     expect(response.body.weather).toBeNull();
     expect(response.body.pois).toHaveLength(1);
+    expect(response.body.status.weather).toBe('fallback');
     expect(response.body.warnings).toContain('Historical weather is unavailable right now.');
   });
 
@@ -178,7 +201,10 @@ describe('asset context route', () => {
       weatherService: createWeatherService(),
       aiSummaryService: createAiSummaryService({
         isEnabled: vi.fn().mockReturnValue(false),
-        summarizePhotoContext: vi.fn().mockResolvedValue(null),
+        summarizePhotoContext: vi.fn().mockResolvedValue({
+          source: 'live',
+          value: null,
+        }),
       }),
       serverConfig: SAMPLE_CONFIG,
     });
@@ -188,6 +214,7 @@ describe('asset context route', () => {
     expect(response.status).toBe(200);
     expect(response.body.aiSummary).toBeNull();
     expect(response.body.aiSummaryAvailable).toBe(false);
+    expect(response.body.status.aiSummary).toBe('disabled');
     expect(response.body.warnings).toEqual([]);
   });
 });

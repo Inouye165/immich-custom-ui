@@ -89,6 +89,17 @@ export function AssetDetailsPanel({
 
               <section className={styles.section}>
                 <div className={styles.sectionHeader}>
+                  <h3>Context status</h3>
+                </div>
+                <dl className={styles.metadataGrid}>
+                  <MetadataRow label="POIs" value={formatStatus(context.status.pois)} />
+                  <MetadataRow label="Weather" value={formatStatus(context.status.weather)} />
+                  <MetadataRow label="AI summary" value={formatStatus(context.status.aiSummary)} />
+                </dl>
+              </section>
+
+              <section className={styles.section}>
+                <div className={styles.sectionHeader}>
                   <h3>Metadata</h3>
                   {asset?.locationLabel && <span className={styles.badge}>{asset.locationLabel}</span>}
                 </div>
@@ -238,4 +249,11 @@ function formatTemperature(celsius: number | null, fahrenheit: number | null) {
 function joinParts(...parts: Array<string | null>) {
   const value = parts.filter(Boolean).join(' ');
   return value || null;
+}
+
+function formatStatus(value: AssetContextResponse['status'][keyof AssetContextResponse['status']]) {
+  return value
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }

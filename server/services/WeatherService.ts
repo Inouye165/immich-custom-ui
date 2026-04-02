@@ -2,7 +2,8 @@ import type { AssetWeather } from '../../src/types';
 import type { ServerConfig } from '../config';
 import type { NormalizedAssetTimestamp } from '../assets/normalizeAssetTimestamp';
 import { formatInstantInTimeZone } from '../assets/normalizeAssetTimestamp';
-import { TimedCache } from './TimedCache';
+import type { CacheLookupResult } from './PersistentCache';
+import { PersistentCache } from './PersistentCache';
 import { fetchJsonWithTimeout } from './requestUtils';
 
 const WEATHER_TIMEOUT_MS = 3000;
@@ -31,11 +32,11 @@ interface OpenMeteoArchiveResponse {
 }
 
 export interface WeatherService {
-  getHistoricalWeather(input: WeatherLookupInput): Promise<AssetWeather | null>;
+  getHistoricalWeather(input: WeatherLookupInput): Promise<CacheLookupResult<AssetWeather | null>>;
 }
 
 export class LiveWeatherService implements WeatherService {
-  private readonly cache = new TimedCache<AssetWeather | null>(WEATHER_CACHE_TTL_MS);
+  private readonly cache = new PersistentCache<AssetWeather | null>('weather-history', WEATHER_CACHE_TTL_MS);
 
   private readonly config: Pick<ServerConfig, 'weatherBaseUrl'>;
 
@@ -43,7 +44,9 @@ export class LiveWeatherService implements WeatherService {
     this.config = config;
   }
 
-  async getHistoricalWeather(input: WeatherLookupInput): Promise<AssetWeather | null> {
+  async getHistoricalWeather(
+    input: WeatherLookupInput,
+  ): Promise<CacheLookupResult<AssetWeather | null>> {
     const cacheKey = [
       input.latitude.toFixed(3),
       input.longitude.toFixed(3),
