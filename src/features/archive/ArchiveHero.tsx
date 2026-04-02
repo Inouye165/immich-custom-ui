@@ -24,7 +24,6 @@ export function ArchiveHero({
       </div>
 
       <div className={styles.inner}>
-        <p className={styles.kicker}>Personal archive</p>
         <h1 className={styles.title}>{name}</h1>
 
         <div className={styles.medallionRow}>

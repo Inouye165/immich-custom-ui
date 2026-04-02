@@ -36,16 +36,8 @@
   text-align: center;
 }
 
-.kicker {
-  margin: 0;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  font-size: 0.72rem;
-  color: rgba(255, 248, 231, 0.82);
-}
-
 .title {
-  margin: 0.35rem 0 0;
+  margin: 0;
   font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
   font-size: clamp(2.4rem, 5vw, 4.25rem);
   line-height: 1;
@@ -79,12 +71,17 @@
 }
 
 .addImageButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 8rem;
   height: 8rem;
   border-radius: 999px;
   font-weight: 700;
+  line-height: 1.1;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  text-align: center;
 }
 
 .secondaryAction {
