@@ -1,12 +1,19 @@
 import express from 'express';
 import type { Response } from 'express';
 import { ZodError } from 'zod';
+import { buildAssetContext } from './assets/buildAssetContext';
+import { assetContextQuerySchema, assetParamsSchema } from './assets/assetSchemas';
+import { getServerConfig, type ServerConfig } from './config';
 import {
   createLiveImmichGateway,
   isRecoverableServerError,
   type ImmichGateway,
   UpstreamHttpError,
 } from './immich/ImmichGateway';
+import { createLiveAiSummaryService, type AiSummaryService } from './services/GeminiService';
+import { createLivePoiService, type PoiService } from './services/PoiService';
+import { createLiveWeatherService, type WeatherService } from './services/WeatherService';
+import { normalizeAssetInfo, normalizeAssetMetadata } from './assets/normalizeAssetDetails';
 import { buildSmartSearchPayload } from './search/buildSmartSearchPayload';
 import { normalizeSearchResponse } from './search/normalizeSearchResponse';
 import {
@@ -17,10 +24,19 @@ import {
 
 interface AppDependencies {
   immichGateway?: ImmichGateway;
+  aiSummaryService?: AiSummaryService;
+  poiService?: PoiService;
+  serverConfig?: ServerConfig;
+  weatherService?: WeatherService;
 }
 
 export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
+  let gateway = dependencies.immichGateway;
+  let aiSummaryService = dependencies.aiSummaryService;
+  let poiService = dependencies.poiService;
+  let serverConfig = dependencies.serverConfig;
+  let weatherService = dependencies.weatherService;
 
   app.use(express.json({ limit: '16kb' }));
 
@@ -31,10 +47,65 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.post('/api/search', async (req, res) => {
     try {
       const request = searchRequestSchema.parse(req.body);
-      const gateway = dependencies.immichGateway ?? createLiveImmichGateway();
       const payload = buildSmartSearchPayload(request);
-      const response = await gateway.searchSmart(payload);
+      const response = await getGateway().searchSmart(payload);
       res.json(normalizeSearchResponse(response));
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
+  app.get('/api/assets/:id', async (req, res) => {
+    try {
+      const { id } = assetParamsSchema.parse(req.params);
+      const asset = await getGateway().getAssetInfo(id);
+      res.json(normalizeAssetInfo(asset));
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
+  app.get('/api/assets/:id/metadata', async (req, res) => {
+    try {
+      const { id } = assetParamsSchema.parse(req.params);
+      const currentGateway = getGateway();
+      const [asset, metadata] = await Promise.all([
+        currentGateway.getAssetInfo(id),
+        currentGateway.getAssetMetadata(id),
+      ]);
+      res.json(normalizeAssetMetadata(asset, metadata));
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
+  app.get('/api/assets/:id/context', async (req, res) => {
+    try {
+      const { id } = assetParamsSchema.parse(req.params);
+      const { includeAiSummary } = assetContextQuerySchema.parse(req.query);
+      const currentGateway = getGateway();
+      const assetInfo = await currentGateway.getAssetInfo(id);
+
+      let rawMetadata = null;
+      const warnings: string[] = [];
+      try {
+        rawMetadata = await currentGateway.getAssetMetadata(id);
+      } catch {
+        warnings.push('Additional asset metadata is unavailable right now.');
+      }
+
+      const response = await buildAssetContext({
+        aiSummaryService: getAiSummaryService(),
+        assetInfo,
+        includeAiSummary,
+        mapDefaultZoom: getServerConfigValue().mapDefaultZoom,
+        poiService: getPoiService(),
+        rawMetadata,
+        warnings,
+        weatherService: getWeatherService(),
+      });
+
+      res.json(response);
     } catch (error) {
       handleError(error, res);
     }
@@ -44,8 +115,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     try {
       const { id } = thumbnailParamsSchema.parse(req.params);
       const { size } = thumbnailQuerySchema.parse(req.query);
-      const gateway = dependencies.immichGateway ?? createLiveImmichGateway();
-      const upstream = await gateway.fetchThumbnail(id, size);
+      const upstream = await getGateway().fetchThumbnail(id, size);
       const contentType = upstream.headers.get('content-type') ?? 'image/jpeg';
       const cacheControl = upstream.headers.get('cache-control') ?? 'private, max-age=300';
       const etag = upstream.headers.get('etag');
@@ -67,6 +137,31 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
 
   return app;
+
+  function getAiSummaryService() {
+    aiSummaryService ??= createLiveAiSummaryService(getServerConfigValue());
+    return aiSummaryService;
+  }
+
+  function getGateway() {
+    gateway ??= createLiveImmichGateway();
+    return gateway;
+  }
+
+  function getPoiService() {
+    poiService ??= createLivePoiService(getServerConfigValue());
+    return poiService;
+  }
+
+  function getServerConfigValue() {
+    serverConfig ??= getServerConfig();
+    return serverConfig;
+  }
+
+  function getWeatherService() {
+    weatherService ??= createLiveWeatherService(getServerConfigValue());
+    return weatherService;
+  }
 }
 
 function handleError(error: unknown, res: Response) {

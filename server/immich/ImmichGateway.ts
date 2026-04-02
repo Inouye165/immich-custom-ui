@@ -1,11 +1,15 @@
 import { ConfigurationError, getServerConfig } from '../config';
 import type {
+  ImmichAssetInfo,
+  ImmichAssetMetadata,
   ImmichSearchResponse,
   ImmichSmartSearchPayload,
   ThumbnailSize,
 } from './immichTypes';
 
 export interface ImmichGateway {
+  getAssetInfo(assetId: string): Promise<ImmichAssetInfo>;
+  getAssetMetadata(assetId: string): Promise<ImmichAssetMetadata>;
   searchSmart(payload: ImmichSmartSearchPayload): Promise<ImmichSearchResponse>;
   fetchThumbnail(assetId: string, size: ThumbnailSize): Promise<Response>;
 }
@@ -49,6 +53,37 @@ export class LiveImmichGateway implements ImmichGateway {
     return (await response.json()) as ImmichSearchResponse;
   }
 
+  async getAssetInfo(assetId: string): Promise<ImmichAssetInfo> {
+    const response = await fetch(`${this.baseUrl}/api/assets/${encodeURIComponent(assetId)}`, {
+      headers: {
+        'x-api-key': this.apiKey,
+      },
+    });
+
+    if (!response.ok) {
+      throw await buildUpstreamError(response, 'asset-info');
+    }
+
+    return (await response.json()) as ImmichAssetInfo;
+  }
+
+  async getAssetMetadata(assetId: string): Promise<ImmichAssetMetadata> {
+    const response = await fetch(
+      `${this.baseUrl}/api/assets/${encodeURIComponent(assetId)}/metadata`,
+      {
+        headers: {
+          'x-api-key': this.apiKey,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw await buildUpstreamError(response, 'asset-metadata');
+    }
+
+    return (await response.json()) as ImmichAssetMetadata;
+  }
+
   async fetchThumbnail(assetId: string, size: ThumbnailSize): Promise<Response> {
     const url = new URL(`${this.baseUrl}/api/assets/${assetId}/thumbnail`);
     url.searchParams.set('size', size);
@@ -74,7 +109,7 @@ export function createLiveImmichGateway(): ImmichGateway {
 
 async function buildUpstreamError(
   response: Response,
-  operation: 'search' | 'thumbnail',
+  operation: 'asset-info' | 'asset-metadata' | 'search' | 'thumbnail',
 ): Promise<UpstreamHttpError> {
   if (response.status === 401 || response.status === 403) {
     return new UpstreamHttpError(
@@ -86,7 +121,11 @@ async function buildUpstreamError(
   const fallbackMessage =
     operation === 'search'
       ? 'Immich search is unavailable right now.'
-      : 'Immich thumbnail retrieval is unavailable right now.';
+      : operation === 'thumbnail'
+        ? 'Immich thumbnail retrieval is unavailable right now.'
+        : operation === 'asset-info'
+          ? 'Immich asset details are unavailable right now.'
+          : 'Immich asset metadata is unavailable right now.';
 
   try {
     const body = (await response.json()) as { message?: string };
