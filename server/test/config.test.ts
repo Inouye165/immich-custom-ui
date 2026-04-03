@@ -34,7 +34,7 @@ describe('server config', () => {
 
     expect(() => getServerConfig()).toThrowError(
       new ConfigurationError(
-        'Server search is not configured. Set IMMICH_BASE_URL and IMMICH_API_KEY.',
+        'Server search is not configured. Missing env: IMMICH_BASE_URL, IMMICH_API_KEY.',
       ),
     );
   });

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
-import type { AssetContextService, SearchService } from '../services';
+import type { AssetContextService, DocumentSearchService, SearchService } from '../services';
 
 vi.mock('../features/assets/AssetLocationMap', () => ({
   AssetLocationMap: () => <div data-testid="asset-location-map" />,
@@ -638,5 +638,102 @@ describe('App', () => {
     expect(within(albumPanel).getByDisplayValue('Dobby')).toBeInTheDocument();
     expect(within(albumPanel).getByRole('img', { name: 'beach.jpg' })).toBeInTheDocument();
     expect(within(albumPanel).getByRole('combobox', { name: 'Switch album draft' })).toBeInTheDocument();
+  });
+});
+
+function createDocumentSearchService(
+  overrides: Partial<DocumentSearchService>,
+): DocumentSearchService {
+  return {
+    searchDocuments: vi.fn(),
+    ...overrides,
+  };
+}
+
+const DOCUMENT_SEARCH_RESPONSE = {
+  results: [
+    {
+      id: 42,
+      title: 'Tax Return 2024',
+      createdDate: '2024-04-15',
+      thumbnailUrl: '/api/documents/42/thumb',
+      previewUrl: '/api/documents/42/preview',
+      snippet: 'Federal income tax return...',
+    },
+  ],
+  total: 1,
+  hasMore: false,
+};
+
+describe('Document search integration', () => {
+  it('renders document results alongside photo results when source is all', async () => {
+    const user = userEvent.setup();
+    const searchService = createSearchService({
+      search: vi.fn().mockResolvedValue(SEARCH_RESPONSE),
+    });
+    const docService = createDocumentSearchService({
+      searchDocuments: vi.fn().mockResolvedValue(DOCUMENT_SEARCH_RESPONSE),
+    });
+
+    render(
+      <App
+        searchService={searchService}
+        documentSearchService={docService}
+        assetContextService={createAssetContextService({ getAssetContext: vi.fn().mockResolvedValue(buildAssetContext()) })}
+      />,
+    );
+
+    await performSearch(user);
+
+    expect(screen.getByLabelText('Open preview of Tax Return 2024')).toBeInTheDocument();
+    expect(screen.getByText('Federal income tax return...')).toBeInTheDocument();
+  });
+
+  it('shows document error banner when document search fails', async () => {
+    const user = userEvent.setup();
+    const searchService = createSearchService({
+      search: vi.fn().mockResolvedValue(SEARCH_RESPONSE),
+    });
+    const docService = createDocumentSearchService({
+      searchDocuments: vi.fn().mockRejectedValue(new Error('Paperless timed out')),
+    });
+
+    render(
+      <App
+        searchService={searchService}
+        documentSearchService={docService}
+        assetContextService={createAssetContextService({ getAssetContext: vi.fn().mockResolvedValue(buildAssetContext()) })}
+      />,
+    );
+
+    await performSearch(user);
+
+    expect(screen.getByText('Paperless timed out')).toBeInTheDocument();
+  });
+
+  it('hides source filter after detecting Paperless is not configured', async () => {
+    const user = userEvent.setup();
+    const searchService = createSearchService({
+      search: vi.fn().mockResolvedValue(SEARCH_RESPONSE),
+    });
+    const docService = createDocumentSearchService({
+      searchDocuments: vi.fn().mockRejectedValue(
+        new Error('Paperless is not configured. Missing env: PAPERLESS_BASE_URL.'),
+      ),
+    });
+
+    render(
+      <App
+        searchService={searchService}
+        documentSearchService={docService}
+        assetContextService={createAssetContextService({ getAssetContext: vi.fn().mockResolvedValue(buildAssetContext()) })}
+      />,
+    );
+
+    expect(screen.getByRole('radiogroup', { name: 'Search source' })).toBeInTheDocument();
+
+    await performSearch(user);
+
+    expect(screen.queryByRole('radiogroup', { name: 'Search source' })).not.toBeInTheDocument();
   });
 });

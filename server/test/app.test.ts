@@ -44,7 +44,7 @@ describe('server app', () => {
 
     expect(response.status).toBe(500);
     expect(response.body.message).toBe(
-      'Server search is not configured. Set IMMICH_BASE_URL and IMMICH_API_KEY.',
+      'Server search is not configured. Missing env: IMMICH_API_KEY.',
     );
   });
 
@@ -119,7 +119,7 @@ describe('server app', () => {
     const response = await request(app).post('/api/search').send({ query: 'sunset' });
 
     expect(response.status).toBe(502);
-    expect(response.body.message).toBe('Photo library credentials were rejected. Check IMMICH_API_KEY.');
+    expect(response.body.message).toContain('Upstream auth rejected (HTTP 401)');
   });
 });
 
@@ -208,5 +208,61 @@ describe('document search routes', () => {
       .query({ query: 'invoice', page: '3' });
 
     expect(paperless.searchDocuments).toHaveBeenCalledWith('invoice', 3);
+  });
+
+  it('returns 500 when paperless gateway is not provided and not configured', async () => {
+    process.env.IMMICH_BASE_URL = 'http://localhost:2283';
+    process.env.IMMICH_API_KEY = 'secret';
+    delete process.env.PAPERLESS_BASE_URL;
+    delete process.env.PAPERLESS_API_TOKEN;
+
+    const app = createApp({ immichGateway: createGatewayStub({}) });
+    const response = await request(app)
+      .get('/api/documents/search')
+      .query({ query: 'tax' });
+
+    expect(response.status).toBe(500);
+    expect(response.body.message).toContain('Paperless is not configured');
+    expect(response.body.message).toContain('PAPERLESS_BASE_URL');
+  });
+
+  it('returns 502 when paperless upstream returns 401', async () => {
+    const paperless = createPaperlessStub({
+      searchDocuments: vi.fn().mockRejectedValue(
+        new UpstreamHttpError(401, 'Paperless document-search failed with status 401'),
+      ),
+    });
+
+    const app = createApp({
+      immichGateway: createGatewayStub({}),
+      paperlessGateway: paperless,
+    });
+
+    const response = await request(app)
+      .get('/api/documents/search')
+      .query({ query: 'tax' });
+
+    expect(response.status).toBe(502);
+    expect(response.body.message).toContain('Upstream auth rejected');
+  });
+
+  it('returns 502 when paperless upstream returns 500', async () => {
+    const paperless = createPaperlessStub({
+      searchDocuments: vi.fn().mockRejectedValue(
+        new UpstreamHttpError(500, 'Paperless document-search failed with status 500'),
+      ),
+    });
+
+    const app = createApp({
+      immichGateway: createGatewayStub({}),
+      paperlessGateway: paperless,
+    });
+
+    const response = await request(app)
+      .get('/api/documents/search')
+      .query({ query: 'tax' });
+
+    expect(response.status).toBe(502);
+    expect(response.body.message).toContain('failed with status 500');
   });
 });

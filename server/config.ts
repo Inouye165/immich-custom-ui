@@ -53,8 +53,11 @@ export function getServerConfig(): ServerConfig {
   const parsed = parseEnvironment();
 
   if (!parsed.IMMICH_BASE_URL || !parsed.IMMICH_API_KEY) {
+    const missing: string[] = [];
+    if (!parsed.IMMICH_BASE_URL) missing.push('IMMICH_BASE_URL');
+    if (!parsed.IMMICH_API_KEY) missing.push('IMMICH_API_KEY');
     throw new ConfigurationError(
-      'Server search is not configured. Set IMMICH_BASE_URL and IMMICH_API_KEY.',
+      `Server search is not configured. Missing env: ${missing.join(', ')}.`,
     );
   }
 

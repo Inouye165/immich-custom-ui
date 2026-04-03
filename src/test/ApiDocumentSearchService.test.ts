@@ -67,4 +67,33 @@ describe('ApiDocumentSearchService', () => {
     const calledUrl = new URL(fetchMock.mock.calls[0][0] as string);
     expect(calledUrl.searchParams.get('page')).toBe('3');
   });
+
+  it('omits page parameter for default page 1', async () => {
+    const mockResponse = { results: [], total: 0, hasMore: false };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(mockResponse), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = new ApiDocumentSearchService();
+    await service.searchDocuments('test');
+
+    const calledUrl = new URL(fetchMock.mock.calls[0][0] as string);
+    expect(calledUrl.searchParams.has('page')).toBe(false);
+  });
+
+  it('uses a fallback message when error response has no body', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('', { status: 502 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = new ApiDocumentSearchService();
+    await expect(service.searchDocuments('test')).rejects.toThrow(
+      'Document search failed.',
+    );
+  });
 });

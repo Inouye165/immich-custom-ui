@@ -88,4 +88,49 @@ describe('SearchForm', () => {
     expect(button).toHaveTextContent('Searching…');
     expect(button).toBeDisabled();
   });
+
+  it('hides the source filter by default', () => {
+    render(<SearchForm onSearch={vi.fn()} isLoading={false} />);
+
+    expect(screen.queryByRole('radiogroup', { name: 'Search source' })).not.toBeInTheDocument();
+  });
+
+  it('renders source filter radios when showSourceFilter is true', () => {
+    render(<SearchForm onSearch={vi.fn()} isLoading={false} showSourceFilter={true} />);
+
+    const group = screen.getByRole('radiogroup', { name: 'Search source' });
+    expect(group).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'All' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Photos' })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Documents' })).not.toBeChecked();
+  });
+
+  it('hides date filters when Documents source is selected', async () => {
+    const user = userEvent.setup();
+    render(<SearchForm onSearch={vi.fn()} isLoading={false} showSourceFilter={true} />);
+
+    await user.click(screen.getByRole('button', { name: 'Show filters' }));
+    expect(screen.getByLabelText('From')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: 'Documents' }));
+    expect(screen.queryByLabelText('From')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('To')).not.toBeInTheDocument();
+  });
+
+  it('submits the selected source value', async () => {
+    const user = userEvent.setup();
+    const onSearch = vi.fn();
+    render(<SearchForm onSearch={onSearch} isLoading={false} showSourceFilter={true} />);
+
+    await user.click(screen.getByRole('radio', { name: 'Documents' }));
+    await user.type(screen.getByLabelText('Search'), 'invoice');
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    expect(onSearch).toHaveBeenCalledWith({
+      query: 'invoice',
+      startDate: undefined,
+      endDate: undefined,
+      source: 'documents',
+    });
+  });
 });

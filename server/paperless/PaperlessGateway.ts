@@ -58,12 +58,15 @@ export class LivePaperlessGateway implements PaperlessGateway {
 }
 
 export function createLivePaperlessGateway(config: ServerConfig): PaperlessGateway {
-  if (!config.paperlessBaseUrl || !config.paperlessApiToken) {
+  const missing: string[] = [];
+  if (!config.paperlessBaseUrl) missing.push('PAPERLESS_BASE_URL');
+  if (!config.paperlessApiToken) missing.push('PAPERLESS_API_TOKEN');
+  if (missing.length > 0) {
     throw new ConfigurationError(
-      'Paperless is not configured. Set PAPERLESS_BASE_URL and PAPERLESS_API_TOKEN.',
+      `Paperless is not configured. Missing env: ${missing.join(', ')}.`,
     );
   }
-  return new LivePaperlessGateway(config.paperlessBaseUrl, config.paperlessApiToken);
+  return new LivePaperlessGateway(config.paperlessBaseUrl!, config.paperlessApiToken!);
 }
 
 async function buildUpstreamError(
