@@ -63,7 +63,10 @@ export function ArchiveStudio({
                 />
               </div>
               <div className={styles.editorMeta}>
-                <h3>{image.title}</h3>
+                <div>
+                  <h3>{image.caption || image.title}</h3>
+                  <p className={styles.sourceName}>Immich name: {image.title}</p>
+                </div>
                 <button onClick={() => onRemoveImage(image.id)} type="button">
                   Remove
                 </button>

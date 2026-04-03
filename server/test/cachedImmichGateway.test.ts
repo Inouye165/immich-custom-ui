@@ -11,6 +11,8 @@ function createInnerGateway(): ImmichGateway {
       assets: { count: 0, items: [], nextPage: null, total: 0 },
     }),
     fetchThumbnail: vi.fn(),
+    fetchVideoPlayback: vi.fn(),
+    trashAssets: vi.fn(),
   };
 }
 

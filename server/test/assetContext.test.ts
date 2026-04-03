@@ -50,6 +50,8 @@ function createGatewayStub(overrides: Partial<ImmichGateway>): ImmichGateway {
     getAssetMetadata: vi.fn().mockResolvedValue({ importSource: 'sidecar' }),
     searchSmart: vi.fn(),
     fetchThumbnail: vi.fn(),
+    fetchVideoPlayback: vi.fn(),
+    trashAssets: vi.fn(),
     ...overrides,
   };
 }

@@ -2,3 +2,7 @@ export type { AssetContextService } from './AssetContextService';
 export { ApiAssetContextService } from './ApiAssetContextService';
 export type { SearchService } from './SearchService';
 export { ApiSearchService } from './ApiSearchService';
+export type { TrashService } from './TrashService';
+export { ApiTrashService } from './ApiTrashService';
+export type { DocumentSearchService } from './DocumentSearchService';
+export { ApiDocumentSearchService } from './ApiDocumentSearchService';

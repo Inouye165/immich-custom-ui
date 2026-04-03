@@ -11,12 +11,14 @@ import type {
 
 export function normalizeAssetInfo(asset: ImmichAssetInfo): AssetDetails {
   const exif = asset.exifInfo;
+  const isVideo = asset.type === 'VIDEO';
 
   return {
     id: asset.id,
     title: asset.originalFileName,
     mediaType: formatMediaType(asset.type),
     imageUrl: `/api/assets/${encodeURIComponent(asset.id)}/thumbnail?size=fullsize`,
+    videoUrl: isVideo ? `/api/assets/${encodeURIComponent(asset.id)}/video/playback` : null,
     thumbnailUrl: `/api/assets/${encodeURIComponent(asset.id)}/thumbnail?size=preview`,
     mimeType: asset.originalMimeType ?? null,
     takenAt: getPreferredTimestamp(asset),

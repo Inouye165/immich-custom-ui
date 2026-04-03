@@ -1,0 +1,287 @@
+/* ── Album Builder panel ── */
+
+.panel {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 1.4rem 1.35rem 1.45rem;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+  min-height: 100%;
+  max-height: none;
+  overflow: hidden;
+  position: relative;
+}
+
+.headerShell {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.headerMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.kicker {
+  margin: 0;
+  color: #1e3a8a;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
+.albumControls {
+  display: flex;
+  align-items: end;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.switcherField {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.switcherField span {
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.draftSwitcher {
+  min-width: 220px;
+  border: 1px solid rgba(59, 130, 246, 0.24);
+  border-radius: 14px;
+  padding: 0.7rem 0.85rem;
+  font: inherit;
+  font-size: 0.92rem;
+  background: rgba(255, 255, 255, 0.94);
+  color: #0f172a;
+}
+
+.draftSwitcher:disabled {
+  color: #94a3b8;
+}
+
+.newAlbumButton {
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  border-radius: 999px;
+  padding: 0.72rem 1rem;
+  background: #eff6ff;
+  color: #1e40af;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.closeButton {
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 999px;
+  padding: 0.72rem 1rem;
+  background: rgba(255, 255, 255, 0.9);
+  color: #475569;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.closeXButton {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 50%;
+  color: #475569;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: background 0.15s;
+}
+
+.closeXButton:hover {
+  background: #f1f5f9;
+}
+
+.albumNameInput {
+  border: 0;
+  border-bottom: 2px solid rgba(59, 130, 246, 0.3);
+  border-radius: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1e293b;
+  padding: 0.25rem 0 0.55rem;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+
+.albumNameInput::placeholder {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.albumNameInput:focus {
+  border-color: #2563eb;
+}
+
+.albumNameInput:disabled {
+  color: #94a3b8;
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+.badge {
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 999px;
+  padding: 0.32rem 0.72rem;
+  font-size: 0.8rem;
+  align-self: flex-start;
+}
+
+.savedState {
+  margin: -0.15rem 0 0;
+  color: #166534;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 3rem 1rem;
+  color: #64748b;
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  flex: 1;
+  justify-content: center;
+}
+
+.emptyIcon {
+  width: 56px;
+  height: 56px;
+  color: #94a3b8;
+}
+
+.photoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 1.1rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 0.15rem 0.1rem 0.25rem;
+  align-content: start;
+}
+
+.gridCell {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #e2e8f0;
+}
+
+.gridThumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gridRemove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.66rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.gridCell:hover .gridRemove,
+.gridCell:focus-within .gridRemove {
+  opacity: 1;
+}
+
+.saveButton {
+  width: 100%;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.8rem 1rem;
+  background: #2563eb;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.saveButton:hover {
+  background: #1d4ed8;
+}
+
+.saveButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .headerShell {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .albumControls {
+    width: 100%;
+  }
+
+  .switcherField,
+  .draftSwitcher,
+  .newAlbumButton {
+    width: 100%;
+  }
+
+  .albumNameInput {
+    font-size: 1.55rem;
+  }
+
+  .photoGrid {
+    grid-template-columns: repeat(auto-fill, minmax(54px, 1fr));
+  }
+}

@@ -17,6 +17,7 @@ function normalizeAsset(asset: ImmichAsset): SearchResult {
     thumbnailUrl: `/api/assets/${encodeURIComponent(asset.id)}/thumbnail?size=preview`,
     date: asset.localDateTime || asset.fileCreatedAt || asset.createdAt,
     description: buildDescription(asset),
+    mediaType: asset.type === 'VIDEO' ? 'video' : 'photo',
   };
 }
 

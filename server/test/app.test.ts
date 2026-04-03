@@ -2,6 +2,8 @@ import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../app';
 import { UpstreamHttpError, type ImmichGateway } from '../immich/ImmichGateway';
+import type { PaperlessGateway } from '../paperless/PaperlessGateway';
+import type { PaperlessSearchResponse } from '../paperless/paperlessTypes';
 
 const originalImmichBaseUrl = process.env.IMMICH_BASE_URL;
 const originalImmichApiKey = process.env.IMMICH_API_KEY;
@@ -26,6 +28,8 @@ function createGatewayStub(overrides: Partial<ImmichGateway>): ImmichGateway {
     getAssetMetadata: vi.fn(),
     searchSmart: vi.fn(),
     fetchThumbnail: vi.fn(),
+    fetchVideoPlayback: vi.fn(),
+    trashAssets: vi.fn(),
     ...overrides,
   };
 }
@@ -116,5 +120,93 @@ describe('server app', () => {
 
     expect(response.status).toBe(502);
     expect(response.body.message).toBe('Photo library credentials were rejected. Check IMMICH_API_KEY.');
+  });
+});
+
+function createPaperlessStub(overrides: Partial<PaperlessGateway> = {}): PaperlessGateway {
+  return {
+    searchDocuments: vi.fn(),
+    fetchThumbnail: vi.fn(),
+    fetchPreview: vi.fn(),
+    ...overrides,
+  };
+}
+
+describe('document search routes', () => {
+  it('rejects empty query', async () => {
+    const app = createApp({
+      immichGateway: createGatewayStub({}),
+      paperlessGateway: createPaperlessStub(),
+    });
+
+    const response = await request(app).get('/api/documents/search').query({ query: '' });
+    expect(response.status).toBe(400);
+  });
+
+  it('returns normalized document search results', async () => {
+    const paperlessResponse: PaperlessSearchResponse = {
+      count: 1,
+      next: null,
+      previous: null,
+      results: [
+        {
+          id: 42,
+          title: 'Tax Return',
+          created: '2024-04-15T00:00:00Z',
+          added: '2024-04-20T00:00:00Z',
+          correspondent: 1,
+          document_type: 2,
+          archive_serial_number: null,
+          content: 'Federal income tax return for the year 2024',
+        },
+      ],
+    };
+
+    const paperless = createPaperlessStub({
+      searchDocuments: vi.fn().mockResolvedValue(paperlessResponse),
+    });
+
+    const app = createApp({
+      immichGateway: createGatewayStub({}),
+      paperlessGateway: paperless,
+    });
+
+    const response = await request(app)
+      .get('/api/documents/search')
+      .query({ query: 'tax' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.total).toBe(1);
+    expect(response.body.hasMore).toBe(false);
+    expect(response.body.results).toHaveLength(1);
+    expect(response.body.results[0]).toMatchObject({
+      id: 42,
+      title: 'Tax Return',
+      thumbnailUrl: '/api/documents/42/thumb',
+      previewUrl: '/api/documents/42/preview',
+    });
+    expect(paperless.searchDocuments).toHaveBeenCalledWith('tax', 1);
+  });
+
+  it('passes page parameter through', async () => {
+    const paperless = createPaperlessStub({
+      searchDocuments: vi.fn().mockResolvedValue({
+        count: 0,
+        next: null,
+        previous: null,
+        results: [],
+      }),
+    });
+
+    const app = createApp({
+      immichGateway: createGatewayStub({}),
+      paperlessGateway: paperless,
+    });
+
+    await request(app)
+      .get('/api/documents/search')
+      .query({ query: 'invoice', page: '3' });
+
+    expect(paperless.searchDocuments).toHaveBeenCalledWith('invoice', 3);
   });
 });

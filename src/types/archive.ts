@@ -1,4 +1,5 @@
 export interface ArchiveFeaturedImage {
+  caption: string;
   id: string;
   offsetX: number;
   offsetY: number;
