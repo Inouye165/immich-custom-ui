@@ -10,26 +10,6 @@
   cursor: context-menu;
 }
 
-.patternLayer span {
-  position: absolute;
-  border: 2px solid rgba(40, 29, 73, 0.42);
-  border-radius: 999px;
-}
-
-.sparkA,
-.sparkB,
-.sparkC,
-.sparkD {
-  width: 74px;
-  height: 74px;
-  opacity: 0.8;
-}
-
-.sparkA { top: 1rem; left: 2rem; }
-.sparkB { top: 1.25rem; right: 4rem; }
-.sparkC { bottom: 2rem; left: 10%; }
-.sparkD { bottom: 1.5rem; right: 8%; }
-
 .inner {
   position: relative;
   max-width: 1040px;
@@ -61,6 +41,10 @@
   gap: 0.4rem;
 }
 
+.medallion {
+  cursor: context-menu;
+}
+
 .emptyMedallion {
   align-self: center;
   width: 2.4rem;
@@ -88,9 +72,11 @@
 }
 
 .medallion figcaption {
-  max-width: 90px;
+  max-width: 110px;
   font-weight: 600;
   color: #fff8e7;
+  text-align: center;
+  word-break: break-word;
 }
 
 @media (max-width: 720px) {

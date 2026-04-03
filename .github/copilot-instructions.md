@@ -31,3 +31,11 @@
 
 - Keep the UI visually clean and professional.
 - Use CSS modules or scoped styles; avoid global style leaks.
+
+## Workflow & Version Control
+
+- When a modification or large code change is completed, execute the test suite.
+- Any issues or test failures that arise—whether caused by the new code or preexisting—must be fixed until the entire suite is 100% green.
+- Once the build is completely green, commit all changes.
+- Push the changes and automatically generate a Pull Request.
+- The PR description must contain a detailed message explicitly outlining all changes, additions, and fixes made during the session.

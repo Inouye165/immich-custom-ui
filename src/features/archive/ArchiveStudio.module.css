@@ -129,6 +129,12 @@
   font-size: 0.98rem;
 }
 
+.sourceName {
+  margin: 0.2rem 0 0;
+  color: #7d7564;
+  font-size: 0.82rem;
+}
+
 .editorMeta button {
   border: 1px solid rgba(184, 151, 72, 0.35);
   border-radius: 999px;

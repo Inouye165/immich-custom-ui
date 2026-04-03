@@ -22,34 +22,51 @@ const SAMPLE_RESULTS: SearchResult[] = [
 ];
 
 describe('SearchResults', () => {
-  it('renders result cards with titles and descriptions', () => {
+  it('renders result cards with friendly labels and descriptions', () => {
     render(
       <SearchResults
+        isAlbumWorkspaceOpen={false}
         canAddMoreFeatured={true}
+        draftAlbumPhotoIds={[]}
         featuredAssetIds={[]}
+        isCompactLayout={false}
         isChoosingHeaderImage={false}
+        isTrashing={false}
         onSelectAsset={vi.fn()}
+        onToggleAlbumPhoto={vi.fn()}
         onToggleFeaturedAsset={vi.fn()}
+        onToggleSelect={vi.fn()}
+        onTrashAssets={vi.fn()}
         results={SAMPLE_RESULTS}
+        selectedIds={new Set<string>()}
         total={2}
       />,
     );
 
-    expect(screen.getByText('Sunset at the beach')).toBeInTheDocument();
-    expect(screen.getByText('Mountain hike')).toBeInTheDocument();
+    // Friendly labels show date (+ location extracted from description)
+    const headings = screen.getAllByRole('heading', { level: 3 });
+    expect(headings).toHaveLength(2);
     expect(screen.getByText('Golden hour at the coast.')).toBeInTheDocument();
-    expect(screen.getByText('2 results found')).toBeInTheDocument();
+    expect(screen.getByText(/results found/)).toBeInTheDocument();
   });
 
   it('renders images with alt text', () => {
     render(
       <SearchResults
+        isAlbumWorkspaceOpen={false}
         canAddMoreFeatured={true}
+        draftAlbumPhotoIds={[]}
         featuredAssetIds={[]}
+        isCompactLayout={false}
         isChoosingHeaderImage={false}
+        isTrashing={false}
         onSelectAsset={vi.fn()}
+        onToggleAlbumPhoto={vi.fn()}
         onToggleFeaturedAsset={vi.fn()}
+        onToggleSelect={vi.fn()}
+        onTrashAssets={vi.fn()}
         results={SAMPLE_RESULTS}
+        selectedIds={new Set<string>()}
         total={2}
       />,
     );
@@ -62,17 +79,26 @@ describe('SearchResults', () => {
   it('uses singular "result" for count of 1', () => {
     render(
       <SearchResults
+        isAlbumWorkspaceOpen={false}
         canAddMoreFeatured={true}
+        draftAlbumPhotoIds={[]}
         featuredAssetIds={[]}
+        isCompactLayout={false}
         isChoosingHeaderImage={false}
+        isTrashing={false}
         onSelectAsset={vi.fn()}
+        onToggleAlbumPhoto={vi.fn()}
         onToggleFeaturedAsset={vi.fn()}
+        onToggleSelect={vi.fn()}
+        onTrashAssets={vi.fn()}
         results={[SAMPLE_RESULTS[0]]}
+        selectedIds={new Set<string>()}
         total={1}
       />,
     );
 
-    expect(screen.getByText('1 result found')).toBeInTheDocument();
+    expect(screen.getByText(/result found/)).toBeInTheDocument();
+    expect(screen.queryByText(/results found/)).not.toBeInTheDocument();
   });
 
   it('opens an asset when a result is clicked', async () => {
@@ -81,12 +107,20 @@ describe('SearchResults', () => {
 
     render(
       <SearchResults
+        isAlbumWorkspaceOpen={false}
         canAddMoreFeatured={true}
+        draftAlbumPhotoIds={[]}
         featuredAssetIds={[]}
+        isCompactLayout={false}
         isChoosingHeaderImage={false}
+        isTrashing={false}
         onSelectAsset={onSelectAsset}
+        onToggleAlbumPhoto={vi.fn()}
         onToggleFeaturedAsset={vi.fn()}
+        onToggleSelect={vi.fn()}
+        onTrashAssets={vi.fn()}
         results={SAMPLE_RESULTS}
+        selectedIds={new Set<string>()}
         total={2}
       />,
     );
@@ -102,12 +136,20 @@ describe('SearchResults', () => {
 
     const { rerender } = render(
       <SearchResults
+        isAlbumWorkspaceOpen={false}
         canAddMoreFeatured={true}
+        draftAlbumPhotoIds={[]}
         featuredAssetIds={[]}
+        isCompactLayout={false}
         isChoosingHeaderImage={false}
+        isTrashing={false}
         onSelectAsset={vi.fn()}
+        onToggleAlbumPhoto={vi.fn()}
         onToggleFeaturedAsset={onToggleFeaturedAsset}
+        onToggleSelect={vi.fn()}
+        onTrashAssets={vi.fn()}
         results={SAMPLE_RESULTS}
+        selectedIds={new Set<string>()}
         total={2}
       />,
     );
@@ -116,12 +158,20 @@ describe('SearchResults', () => {
 
     rerender(
       <SearchResults
+        isAlbumWorkspaceOpen={false}
         canAddMoreFeatured={true}
+        draftAlbumPhotoIds={[]}
         featuredAssetIds={[]}
+        isCompactLayout={false}
         isChoosingHeaderImage={true}
+        isTrashing={false}
         onSelectAsset={vi.fn()}
+        onToggleAlbumPhoto={vi.fn()}
         onToggleFeaturedAsset={onToggleFeaturedAsset}
+        onToggleSelect={vi.fn()}
+        onTrashAssets={vi.fn()}
         results={SAMPLE_RESULTS}
+        selectedIds={new Set<string>()}
         total={2}
       />,
     );
@@ -133,15 +183,74 @@ describe('SearchResults', () => {
     rerender(
       <SearchResults
         canAddMoreFeatured={true}
+        draftAlbumPhotoIds={[]}
         featuredAssetIds={['1']}
+        isCompactLayout={false}
         isChoosingHeaderImage={false}
+        isTrashing={false}
         onSelectAsset={vi.fn()}
+        onToggleAlbumPhoto={vi.fn()}
         onToggleFeaturedAsset={onToggleFeaturedAsset}
+        onToggleSelect={vi.fn()}
+        onTrashAssets={vi.fn()}
         results={SAMPLE_RESULTS}
+        selectedIds={new Set<string>()}
         total={2}
       />,
     );
 
     expect(screen.queryByRole('button', { name: /remove sunset at the beach from header/i })).not.toBeInTheDocument();
+  });
+
+  it('disables the album button when the photo is already in the active draft', () => {
+    render(
+      <SearchResults
+        isAlbumWorkspaceOpen={true}
+        canAddMoreFeatured={true}
+        draftAlbumPhotoIds={['1']}
+        featuredAssetIds={[]}
+        isCompactLayout={true}
+        isChoosingHeaderImage={false}
+        isTrashing={false}
+        onSelectAsset={vi.fn()}
+        onToggleAlbumPhoto={vi.fn()}
+        onToggleFeaturedAsset={vi.fn()}
+        onToggleSelect={vi.fn()}
+        onTrashAssets={vi.fn()}
+        results={SAMPLE_RESULTS}
+        selectedIds={new Set<string>()}
+        total={2}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /sunset at the beach already added to album/i })).toBeDisabled();
+  });
+
+  it('shows an open album action when the photo is already in the active draft but the workspace is hidden', async () => {
+    const user = userEvent.setup();
+    const onToggleAlbumPhoto = vi.fn();
+
+    render(
+      <SearchResults
+        isAlbumWorkspaceOpen={false}
+        canAddMoreFeatured={true}
+        draftAlbumPhotoIds={['1']}
+        featuredAssetIds={[]}
+        isCompactLayout={false}
+        isChoosingHeaderImage={false}
+        isTrashing={false}
+        onSelectAsset={vi.fn()}
+        onToggleAlbumPhoto={onToggleAlbumPhoto}
+        onToggleFeaturedAsset={vi.fn()}
+        onToggleSelect={vi.fn()}
+        onTrashAssets={vi.fn()}
+        results={SAMPLE_RESULTS}
+        selectedIds={new Set<string>()}
+        total={2}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /open album for sunset at the beach/i }));
+    expect(onToggleAlbumPhoto).toHaveBeenCalledWith(SAMPLE_RESULTS[0]);
   });
 });

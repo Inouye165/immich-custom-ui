@@ -20,6 +20,8 @@ const envSchema = z.object({
   OVERPASS_BASE_URL: z.preprocess(blankToUndefined, z.string().url().optional()),
   MAP_DEFAULT_ZOOM: z.coerce.number().int().min(1).max(20).default(15),
   MAP_POI_RADIUS_METERS: z.coerce.number().int().min(100).max(10000).default(1000),
+  PAPERLESS_BASE_URL: z.preprocess(blankToUndefined, z.string().url().optional()),
+  PAPERLESS_API_TOKEN: z.preprocess(blankToUndefined, z.string().min(1).optional()),
 });
 
 export class ConfigurationError extends Error {
@@ -39,6 +41,8 @@ export interface ServerConfig {
   overpassBaseUrl: string;
   mapDefaultZoom: number;
   mapPoiRadiusMeters: number;
+  paperlessBaseUrl?: string;
+  paperlessApiToken?: string;
 }
 
 export function getPort(): number {
@@ -66,6 +70,8 @@ export function getServerConfig(): ServerConfig {
       parsed.OVERPASS_BASE_URL ?? 'https://overpass-api.de/api/interpreter',
     mapDefaultZoom: parsed.MAP_DEFAULT_ZOOM,
     mapPoiRadiusMeters: parsed.MAP_POI_RADIUS_METERS,
+    paperlessBaseUrl: parsed.PAPERLESS_BASE_URL?.replace(/\/$/, ''),
+    paperlessApiToken: parsed.PAPERLESS_API_TOKEN,
   };
 }
 

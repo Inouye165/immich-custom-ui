@@ -43,6 +43,7 @@ export interface AssetDetails {
   title: string;
   mediaType: string;
   imageUrl: string;
+  videoUrl: string | null;
   thumbnailUrl: string;
   mimeType: string | null;
   takenAt: string | null;

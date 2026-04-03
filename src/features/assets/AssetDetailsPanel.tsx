@@ -48,30 +48,60 @@ export function AssetDetailsPanel({
   const asset = context?.asset;
   const metadata = context?.metadata;
   const imageUrl = asset?.imageUrl ?? selectedAsset.thumbnailUrl;
+  const videoUrl = asset?.videoUrl ?? null;
+  const isVideo = asset?.mediaType === 'Video' || selectedAsset.mediaType === 'video';
+  const mimeType = asset?.mimeType ?? 'video/mp4';
+  const mediaLabel = isVideo ? 'Video' : 'Photo';
 
   return (
     <div className={styles.overlay} onClick={onClose}>
-      <aside
+      <div
         aria-labelledby="asset-details-title"
         aria-modal="true"
-        className={styles.panel}
+        className={styles.splitView}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
       >
-        <header className={styles.header}>
-          <div>
-            <p className={styles.eyebrow}>Asset details</p>
-            <h2 className={styles.title} id="asset-details-title">
-              {asset?.title ?? selectedAsset.title}
-            </h2>
-          </div>
-          <button aria-label="Close asset details" className={styles.closeButton} onClick={onClose} type="button">
-            Close
-          </button>
-        </header>
+        {/* Left: media */}
+        <div className={styles.mediaPane}>
+          {isVideo && videoUrl ? (
+            <video
+              className={styles.heroMedia}
+              controls
+              poster={selectedAsset.thumbnailUrl}
+            >
+              <source src={videoUrl} type={mimeType} />
+            </video>
+          ) : (
+            <img alt={asset?.title ?? selectedAsset.title} className={styles.heroMedia} src={imageUrl} />
+          )}
+        </div>
 
-        <div className={styles.content}>
-          <img alt={asset?.title ?? selectedAsset.title} className={styles.heroImage} src={imageUrl} />
+        {/* Right: info */}
+        <aside className={styles.infoPane}>
+          <header className={styles.header}>
+            <div>
+              <div className={styles.eyebrowRow}>
+                <p className={styles.eyebrow}>Asset details</p>
+                <span className={`${styles.mediaTypeBadge} ${isVideo ? styles.videoBadge : styles.photoBadge}`}>
+                  {isVideo && (
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  )}
+                  {mediaLabel}
+                </span>
+              </div>
+              <h2 className={styles.title} id="asset-details-title">
+                {asset?.title ?? selectedAsset.title}
+              </h2>
+            </div>
+            <button aria-label="Close asset details" className={styles.closeButton} onClick={onClose} type="button">
+              Close
+            </button>
+          </header>
+
+          <div className={styles.content}>
 
           {errorMessage && <ErrorBanner message={errorMessage} />}
 
@@ -92,8 +122,8 @@ export function AssetDetailsPanel({
                   <h3>Context status</h3>
                 </div>
                 <dl className={styles.metadataGrid}>
-                  <MetadataRow label="POIs" value={formatStatus(context.status.pois)} />
-                  <MetadataRow label="Weather" value={formatStatus(context.status.weather)} />
+                  <MetadataRow label="POIs" value={formatPoiStatus(context)} />
+                  <MetadataRow label="Weather" value={formatWeatherStatus(context)} />
                   <MetadataRow label="AI summary" value={formatStatus(context.status.aiSummary)} />
                 </dl>
               </section>
@@ -122,7 +152,7 @@ export function AssetDetailsPanel({
                   {context.gps && <span className={styles.badge}>Zoom {context.map?.zoom}</span>}
                 </div>
 
-                {!context.gps && <div className={styles.placeholder}>No GPS location available.</div>}
+                {!context.gps && <div className={styles.placeholder}>No GPS coordinates in this asset&rsquo;s metadata. Location-based features (map, POIs, weather) require embedded GPS data.</div>}
 
                 {context.gps && context.map && (
                   <>
@@ -196,7 +226,8 @@ export function AssetDetailsPanel({
             </>
           )}
         </div>
-      </aside>
+        </aside>
+      </div>
     </div>
   );
 }
@@ -256,4 +287,30 @@ function formatStatus(value: AssetContextResponse['status'][keyof AssetContextRe
     .split('-')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+function formatPoiStatus(context: AssetContextResponse): string {
+  if (!context.gps) {
+    return 'Skipped — no GPS coordinates in metadata';
+  }
+  if (context.status.pois === 'unavailable') {
+    return 'Unavailable — POI service did not respond';
+  }
+  if (context.status.pois === 'fallback') {
+    return 'Unavailable — POI service error (may be down)';
+  }
+  return formatStatus(context.status.pois);
+}
+
+function formatWeatherStatus(context: AssetContextResponse): string {
+  if (!context.gps) {
+    return 'Skipped — no GPS coordinates in metadata';
+  }
+  if (context.status.weather === 'unavailable') {
+    return 'Unavailable — weather service did not respond';
+  }
+  if (context.status.weather === 'fallback') {
+    return 'Unavailable — weather service error (may be down)';
+  }
+  return formatStatus(context.status.weather);
 }

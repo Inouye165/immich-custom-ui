@@ -13,6 +13,8 @@ export interface ImmichGateway {
   getAssetMetadata(assetId: string): Promise<ImmichAssetMetadata>;
   searchSmart(payload: ImmichSmartSearchPayload): Promise<ImmichSearchResponse>;
   fetchThumbnail(assetId: string, size: ThumbnailSize): Promise<Response>;
+  fetchVideoPlayback(assetId: string, range?: string): Promise<Response>;
+  trashAssets(ids: string[]): Promise<void>;
 }
 
 export class UpstreamHttpError extends Error {
@@ -100,6 +102,37 @@ export class LiveImmichGateway implements ImmichGateway {
     }
 
     return response;
+  }
+
+  async fetchVideoPlayback(assetId: string, range?: string): Promise<Response> {
+    const url = `${this.baseUrl}/api/assets/${encodeURIComponent(assetId)}/video/playback`;
+    const headers: Record<string, string> = { 'x-api-key': this.apiKey };
+    if (range) {
+      headers['range'] = range;
+    }
+
+    const response = await fetch(url, { headers });
+
+    if (!response.ok) {
+      throw await buildUpstreamError(response, 'thumbnail');
+    }
+
+    return response;
+  }
+
+  async trashAssets(ids: string[]): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/api/assets`, {
+      method: 'DELETE',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': this.apiKey,
+      },
+      body: JSON.stringify({ ids, force: false }),
+    });
+
+    if (!response.ok) {
+      throw await buildUpstreamError(response, 'trash');
+    }
   }
 }
 

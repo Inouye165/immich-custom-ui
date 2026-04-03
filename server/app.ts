@@ -2,7 +2,7 @@ import express from 'express';
 import type { Response } from 'express';
 import { ZodError } from 'zod';
 import { buildAssetContext } from './assets/buildAssetContext';
-import { assetContextQuerySchema, assetParamsSchema } from './assets/assetSchemas';
+import { assetContextQuerySchema, assetParamsSchema, trashRequestSchema } from './assets/assetSchemas';
 import { getServerConfig, type ServerConfig } from './config';
 import {
   createLiveImmichGateway,
@@ -21,10 +21,19 @@ import {
   thumbnailParamsSchema,
   thumbnailQuerySchema,
 } from './search/searchSchemas';
+import {
+  createLivePaperlessGateway,
+  type PaperlessGateway,
+} from './paperless/PaperlessGateway';
+import {
+  documentSearchQuerySchema,
+  documentParamsSchema,
+} from './paperless/paperlessSchemas';
 
 interface AppDependencies {
   immichGateway?: ImmichGateway;
   aiSummaryService?: AiSummaryService;
+  paperlessGateway?: PaperlessGateway;
   poiService?: PoiService;
   serverConfig?: ServerConfig;
   weatherService?: WeatherService;
@@ -37,6 +46,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   let poiService = dependencies.poiService;
   let serverConfig = dependencies.serverConfig;
   let weatherService = dependencies.weatherService;
+  let paperlessGw = dependencies.paperlessGateway;
 
   app.use(express.json({ limit: '16kb' }));
 
@@ -136,6 +146,114 @@ export function createApp(dependencies: AppDependencies = {}) {
     }
   });
 
+  app.get('/api/assets/:id/video/playback', async (req, res) => {
+    try {
+      const { id } = assetParamsSchema.parse(req.params);
+      const range = req.headers.range;
+      const upstream = await getGateway().fetchVideoPlayback(id, range);
+
+      const contentType = upstream.headers.get('content-type') ?? 'video/mp4';
+      const cacheControl = upstream.headers.get('cache-control') ?? 'private, max-age=300';
+      const contentLength = upstream.headers.get('content-length');
+      const contentRange = upstream.headers.get('content-range');
+      const acceptRanges = upstream.headers.get('accept-ranges');
+
+      res.status(upstream.status);
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', cacheControl);
+      if (acceptRanges) {
+        res.setHeader('Accept-Ranges', acceptRanges);
+      } else {
+        res.setHeader('Accept-Ranges', 'bytes');
+      }
+      if (contentRange) {
+        res.setHeader('Content-Range', contentRange);
+      }
+      if (contentLength) {
+        res.setHeader('Content-Length', contentLength);
+      }
+
+      if (upstream.body) {
+        const { Readable } = await import('node:stream');
+        const nodeStream = Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream);
+        nodeStream.pipe(res);
+      } else {
+        res.end();
+      }
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
+  app.post('/api/assets/trash', async (req, res) => {
+    try {
+      const { ids } = trashRequestSchema.parse(req.body);
+      await getGateway().trashAssets(ids);
+      res.json({ trashedIds: ids });
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
+  app.get('/api/documents/search', async (req, res) => {
+    try {
+      const { query, page } = documentSearchQuerySchema.parse(req.query);
+      const raw = await getPaperlessGateway().searchDocuments(query, page);
+      res.json({
+        results: raw.results.map((doc) => ({
+          id: doc.id,
+          title: doc.title,
+          createdDate: doc.created,
+          thumbnailUrl: `/api/documents/${doc.id}/thumb`,
+          previewUrl: `/api/documents/${doc.id}/preview`,
+          snippet: doc.content ? doc.content.slice(0, 280) : undefined,
+        })),
+        total: raw.count,
+        hasMore: raw.next !== null,
+      });
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
+  app.get('/api/documents/:id/thumb', async (req, res) => {
+    try {
+      const { id } = documentParamsSchema.parse(req.params);
+      const upstream = await getPaperlessGateway().fetchThumbnail(id);
+      const contentType = upstream.headers.get('content-type') ?? 'image/png';
+      const cacheControl = upstream.headers.get('cache-control') ?? 'private, max-age=300';
+      const payload = Buffer.from(await upstream.arrayBuffer());
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', cacheControl);
+      res.send(payload);
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
+  app.get('/api/documents/:id/preview', async (req, res) => {
+    try {
+      const { id } = documentParamsSchema.parse(req.params);
+      const upstream = await getPaperlessGateway().fetchPreview(id);
+      const contentType = upstream.headers.get('content-type') ?? 'application/pdf';
+      const contentLength = upstream.headers.get('content-length');
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', 'inline');
+      if (contentLength) {
+        res.setHeader('Content-Length', contentLength);
+      }
+      if (upstream.body) {
+        const { Readable } = await import('node:stream');
+        const nodeStream = Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream);
+        nodeStream.pipe(res);
+      } else {
+        res.end();
+      }
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
   return app;
 
   function getAiSummaryService() {
@@ -161,6 +279,11 @@ export function createApp(dependencies: AppDependencies = {}) {
   function getWeatherService() {
     weatherService ??= createLiveWeatherService(getServerConfigValue());
     return weatherService;
+  }
+
+  function getPaperlessGateway() {
+    paperlessGw ??= createLivePaperlessGateway(getServerConfigValue());
+    return paperlessGw;
   }
 }
 

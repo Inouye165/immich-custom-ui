@@ -44,4 +44,12 @@ export class CachedImmichGateway implements ImmichGateway {
   fetchThumbnail(assetId: string, size: ThumbnailSize): Promise<Response> {
     return this.inner.fetchThumbnail(assetId, size);
   }
+
+  fetchVideoPlayback(assetId: string, range?: string): Promise<Response> {
+    return this.inner.fetchVideoPlayback(assetId, range);
+  }
+
+  async trashAssets(ids: string[]): Promise<void> {
+    await this.inner.trashAssets(ids);
+  }
 }

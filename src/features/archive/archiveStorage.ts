@@ -24,7 +24,10 @@ export function loadArchivePreferences(): ArchivePreferences {
     const parsed = JSON.parse(raw) as Partial<ArchivePreferences>;
     return {
       featuredImages: Array.isArray(parsed.featuredImages)
-        ? parsed.featuredImages.filter(isArchiveImage).slice(0, MAX_ARCHIVE_IMAGES)
+        ? parsed.featuredImages
+          .map(normalizeArchiveImage)
+          .filter((image): image is ArchiveFeaturedImage => image !== null)
+          .slice(0, MAX_ARCHIVE_IMAGES)
         : [],
       name: typeof parsed.name === 'string' && parsed.name.trim().length > 0
         ? parsed.name
@@ -53,6 +56,7 @@ function isArchiveImage(value: unknown): value is ArchiveFeaturedImage {
 
   const candidate = value as Record<string, unknown>;
   return (
+    typeof candidate.caption === 'string' &&
     typeof candidate.id === 'string' &&
     typeof candidate.offsetX === 'number' &&
     typeof candidate.offsetY === 'number' &&
@@ -60,4 +64,36 @@ function isArchiveImage(value: unknown): value is ArchiveFeaturedImage {
     typeof candidate.thumbnailUrl === 'string' &&
     typeof candidate.title === 'string'
   );
+}
+
+function normalizeArchiveImage(value: unknown): ArchiveFeaturedImage | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (isArchiveImage(candidate)) {
+    return candidate;
+  }
+
+  if (
+    typeof candidate.id !== 'string' ||
+    typeof candidate.offsetX !== 'number' ||
+    typeof candidate.offsetY !== 'number' ||
+    typeof candidate.scale !== 'number' ||
+    typeof candidate.thumbnailUrl !== 'string' ||
+    typeof candidate.title !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    caption: candidate.title,
+    id: candidate.id,
+    offsetX: candidate.offsetX,
+    offsetY: candidate.offsetY,
+    scale: candidate.scale,
+    thumbnailUrl: candidate.thumbnailUrl,
+    title: candidate.title,
+  };
 }

@@ -35,6 +35,7 @@ describe('normalizeSearchResponse', () => {
         thumbnailUrl: '/api/assets/0d2cbf93-6075-4f8d-bdc3-6f3777eb34ab/thumbnail?size=preview',
         date: '2024-08-15T05:00:00.000Z',
         description: 'Photo • Seattle, Washington, USA',
+        mediaType: 'photo',
       },
     ]);
   });
