@@ -84,3 +84,15 @@
     display: none;
   }
 }
+
+.fallbackBanner {
+  font-size: 0.85rem;
+  color: #5d5646;
+  background: rgba(14, 141, 150, 0.06);
+  border: 1px solid rgba(14, 141, 150, 0.18);
+  border-radius: 12px;
+  padding: 0.6rem 1rem;
+  margin: 0.75rem auto 0;
+  max-width: 760px;
+  text-align: center;
+}

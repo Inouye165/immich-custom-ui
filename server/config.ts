@@ -22,6 +22,18 @@ const envSchema = z.object({
   MAP_POI_RADIUS_METERS: z.coerce.number().int().min(100).max(10000).default(1000),
   PAPERLESS_BASE_URL: z.preprocess(blankToUndefined, z.string().url().optional()),
   PAPERLESS_API_TOKEN: z.preprocess(blankToUndefined, z.string().min(1).optional()),
+  QDRANT_URL: z.preprocess(blankToUndefined, z.string().url().optional()),
+  QDRANT_API_KEY: z.preprocess(blankToUndefined, z.string().min(1).optional()),
+  DOCUMENT_VECTOR_ENABLED: z.preprocess(blankToUndefined, z.string().optional()),
+  DOCUMENT_VECTOR_COLLECTION: z.preprocess(blankToUndefined, z.string().min(1).optional()),
+  DOCUMENT_EMBEDDING_PROVIDER: z.preprocess(blankToUndefined, z.string().min(1).optional()),
+  DOCUMENT_EMBEDDING_MODEL: z.preprocess(blankToUndefined, z.string().min(1).optional()),
+  DOCUMENT_EMBEDDING_API_KEY: z.preprocess(blankToUndefined, z.string().min(1).optional()),
+  DOCUMENT_EMBEDDING_BASE_URL: z.preprocess(blankToUndefined, z.string().url().optional()),
+  DOCUMENT_INDEX_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(50),
+  DOCUMENT_INDEX_CHUNK_SIZE: z.coerce.number().int().min(100).max(10000).default(1000),
+  DOCUMENT_INDEX_CHUNK_OVERLAP: z.coerce.number().int().min(0).max(2000).default(200),
+  VECTOR_SCHEMA_VERSION: z.preprocess(blankToUndefined, z.string().min(1).optional()),
 });
 
 export class ConfigurationError extends Error {
@@ -43,6 +55,25 @@ export interface ServerConfig {
   mapPoiRadiusMeters: number;
   paperlessBaseUrl?: string;
   paperlessApiToken?: string;
+}
+
+export interface PaperlessConfig {
+  baseUrl: string;
+  apiToken: string;
+}
+
+export interface VectorConfig {
+  qdrantUrl: string;
+  qdrantApiKey?: string;
+  collection: string;
+  embeddingProvider: string;
+  embeddingModel: string;
+  embeddingApiKey?: string;
+  embeddingBaseUrl?: string;
+  indexBatchSize: number;
+  indexChunkSize: number;
+  indexChunkOverlap: number;
+  schemaVersion: string;
 }
 
 export function getPort(): number {
@@ -72,6 +103,46 @@ export function getServerConfig(): ServerConfig {
     mapPoiRadiusMeters: parsed.MAP_POI_RADIUS_METERS,
     paperlessBaseUrl: parsed.PAPERLESS_BASE_URL?.replace(/\/$/, ''),
     paperlessApiToken: parsed.PAPERLESS_API_TOKEN,
+  };
+}
+
+/** Returns Paperless config independently of Immich. Null when not configured. */
+export function getPaperlessConfig(): PaperlessConfig | null {
+  const parsed = parseEnvironment();
+  if (!parsed.PAPERLESS_BASE_URL || !parsed.PAPERLESS_API_TOKEN) {
+    return null;
+  }
+  return {
+    baseUrl: parsed.PAPERLESS_BASE_URL.replace(/\/$/, ''),
+    apiToken: parsed.PAPERLESS_API_TOKEN,
+  };
+}
+
+/** Returns vector-search config independently. Null when disabled or incomplete. */
+export function getVectorConfig(): VectorConfig | null {
+  const parsed = parseEnvironment();
+  if (parsed.DOCUMENT_VECTOR_ENABLED?.toLowerCase() !== 'true') {
+    return null;
+  }
+  if (
+    !parsed.QDRANT_URL ||
+    !parsed.DOCUMENT_EMBEDDING_PROVIDER ||
+    !parsed.DOCUMENT_EMBEDDING_MODEL
+  ) {
+    return null;
+  }
+  return {
+    qdrantUrl: parsed.QDRANT_URL.replace(/\/$/, ''),
+    qdrantApiKey: parsed.QDRANT_API_KEY,
+    collection: parsed.DOCUMENT_VECTOR_COLLECTION ?? 'documents',
+    embeddingProvider: parsed.DOCUMENT_EMBEDDING_PROVIDER,
+    embeddingModel: parsed.DOCUMENT_EMBEDDING_MODEL,
+    embeddingApiKey: parsed.DOCUMENT_EMBEDDING_API_KEY,
+    embeddingBaseUrl: parsed.DOCUMENT_EMBEDDING_BASE_URL?.replace(/\/$/, ''),
+    indexBatchSize: parsed.DOCUMENT_INDEX_BATCH_SIZE,
+    indexChunkSize: parsed.DOCUMENT_INDEX_CHUNK_SIZE,
+    indexChunkOverlap: parsed.DOCUMENT_INDEX_CHUNK_OVERLAP,
+    schemaVersion: parsed.VECTOR_SCHEMA_VERSION ?? 'v1',
   };
 }
 

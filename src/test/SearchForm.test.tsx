@@ -59,6 +59,7 @@ describe('SearchForm', () => {
       startDate: undefined,
       endDate: undefined,
       source: 'all',
+      documentMode: 'hybrid',
     });
   });
 
@@ -78,6 +79,7 @@ describe('SearchForm', () => {
       startDate: '2024-01-01',
       endDate: '2024-12-31',
       source: 'all',
+      documentMode: 'hybrid',
     });
   });
 
@@ -87,5 +89,48 @@ describe('SearchForm', () => {
     const button = screen.getByRole('button', { name: 'Searching…' });
     expect(button).toHaveTextContent('Searching…');
     expect(button).toBeDisabled();
+  });
+
+  it('shows document mode pills when source filter is visible and includes documents', async () => {
+    const user = userEvent.setup();
+    render(<SearchForm onSearch={vi.fn()} isLoading={false} showSourceFilter={true} />);
+
+    // Default source is 'all', so doc mode pills should appear
+    expect(screen.getByLabelText('Document search mode')).toBeInTheDocument();
+    expect(screen.getByText('Hybrid')).toBeInTheDocument();
+    expect(screen.getByText('Keyword')).toBeInTheDocument();
+    expect(screen.getByText('Semantic')).toBeInTheDocument();
+
+    // Switch to photos-only — doc mode pills should disappear
+    await user.click(screen.getByText('Photos'));
+    expect(screen.queryByLabelText('Document search mode')).not.toBeInTheDocument();
+  });
+
+  it('passes selected document mode to onSearch', async () => {
+    const user = userEvent.setup();
+    const onSearch = vi.fn();
+    render(<SearchForm onSearch={onSearch} isLoading={false} showSourceFilter={true} />);
+
+    await user.type(screen.getByLabelText('Search'), 'receipt');
+    await user.click(screen.getByText('Keyword'));
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    expect(onSearch).toHaveBeenCalledWith(
+      expect.objectContaining({ documentMode: 'keyword' }),
+    );
+  });
+
+  it('does not include documentMode when source is photos-only', async () => {
+    const user = userEvent.setup();
+    const onSearch = vi.fn();
+    render(<SearchForm onSearch={onSearch} isLoading={false} showSourceFilter={true} />);
+
+    await user.type(screen.getByLabelText('Search'), 'sunset');
+    await user.click(screen.getByText('Photos'));
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    expect(onSearch).toHaveBeenCalledWith(
+      expect.objectContaining({ documentMode: undefined }),
+    );
   });
 });

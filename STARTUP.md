@@ -37,8 +37,29 @@ What the shutdown script does:
 
 - Runtime state is stored in `.runtime/startup-state.json` and is ignored by git.
 - Persistent API cache files are stored in `.runtime/api-cache` and are ignored by git.
-- Docker is treated as optional today because this repo does not yet include a compose file.
+- Docker is used for the Qdrant sidecar (`docker-compose.yml`). The startup script auto-discovers and runs compose files.
 - The startup log below is append-only and is intended to be hardened over time with real-world failures and fixes.
+
+## Document Semantic Search (Qdrant)
+
+To enable hybrid document search, configure these environment variables:
+
+```env
+DOCUMENT_VECTOR_ENABLED=true
+QDRANT_URL=http://localhost:6333
+DOCUMENT_EMBEDDING_PROVIDER=openai
+DOCUMENT_EMBEDDING_MODEL=text-embedding-3-small
+DOCUMENT_EMBEDDING_API_KEY=sk-...
+DOCUMENT_EMBEDDING_BASE_URL=https://api.openai.com/v1  # optional, defaults to OpenAI
+```
+
+Then run the incremental indexer:
+
+```bash
+npm run docs:index
+```
+
+The indexer pages through all Paperless documents, chunks their text, generates embeddings, and upserts them into Qdrant. Subsequent runs skip unchanged documents (SHA-256 fingerprint comparison).
 
 ## Startup Issue Log
 

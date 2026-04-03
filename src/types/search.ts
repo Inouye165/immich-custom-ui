@@ -1,5 +1,7 @@
 /** Domain types for search requests and results. */
 
+import type { DocumentSearchMode } from './document';
+
 export type SearchSource = 'all' | 'photos' | 'documents';
 
 export interface SearchRequest {
@@ -7,6 +9,7 @@ export interface SearchRequest {
   startDate?: string;
   endDate?: string;
   source?: SearchSource;
+  documentMode?: DocumentSearchMode;
 }
 
 export interface SearchResult {

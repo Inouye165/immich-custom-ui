@@ -3,7 +3,7 @@ import type { Response } from 'express';
 import { ZodError } from 'zod';
 import { buildAssetContext } from './assets/buildAssetContext';
 import { assetContextQuerySchema, assetParamsSchema, trashRequestSchema } from './assets/assetSchemas';
-import { getServerConfig, type ServerConfig } from './config';
+import { getServerConfig, getPaperlessConfig, getVectorConfig, type ServerConfig } from './config';
 import {
   createLiveImmichGateway,
   isRecoverableServerError,
@@ -22,18 +22,23 @@ import {
   thumbnailQuerySchema,
 } from './search/searchSchemas';
 import {
-  createLivePaperlessGateway,
+  createPaperlessGatewayFromConfig,
   type PaperlessGateway,
 } from './paperless/PaperlessGateway';
 import {
   documentSearchQuerySchema,
   documentParamsSchema,
 } from './paperless/paperlessSchemas';
+import { HybridDocumentSearchService } from './vector/HybridDocumentSearchService';
+import { DocumentSemanticSearchService } from './vector/DocumentSemanticSearchService';
+import { OpenAICompatibleEmbeddingService } from './vector/EmbeddingService';
+import { getQdrantClient } from './vector/QdrantClientFactory';
 
 interface AppDependencies {
   immichGateway?: ImmichGateway;
   aiSummaryService?: AiSummaryService;
   paperlessGateway?: PaperlessGateway;
+  hybridSearchService?: HybridDocumentSearchService;
   poiService?: PoiService;
   serverConfig?: ServerConfig;
   weatherService?: WeatherService;
@@ -47,6 +52,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   let serverConfig = dependencies.serverConfig;
   let weatherService = dependencies.weatherService;
   let paperlessGw = dependencies.paperlessGateway;
+  let hybridSearch = dependencies.hybridSearchService;
 
   app.use(express.json({ limit: '16kb' }));
 
@@ -197,19 +203,16 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   app.get('/api/documents/search', async (req, res) => {
     try {
-      const { query, page } = documentSearchQuerySchema.parse(req.query);
-      const raw = await getPaperlessGateway().searchDocuments(query, page);
+      const { query, page, mode } = documentSearchQuerySchema.parse(req.query);
+      const service = getHybridSearchService();
+      const result = await service.search(query, page, mode);
       res.json({
-        results: raw.results.map((doc) => ({
-          id: doc.id,
-          title: doc.title,
-          createdDate: doc.created,
-          thumbnailUrl: `/api/documents/${doc.id}/thumb`,
-          previewUrl: `/api/documents/${doc.id}/preview`,
-          snippet: doc.content ? doc.content.slice(0, 280) : undefined,
-        })),
-        total: raw.count,
-        hasMore: raw.next !== null,
+        results: result.results,
+        total: result.total,
+        hasMore: result.hasMore,
+        mode: result.mode,
+        fallback: result.fallback,
+        fallbackReason: result.fallbackReason,
       });
     } catch (error) {
       handleError(error, res);
@@ -282,8 +285,35 @@ export function createApp(dependencies: AppDependencies = {}) {
   }
 
   function getPaperlessGateway() {
-    paperlessGw ??= createLivePaperlessGateway(getServerConfigValue());
+    if (!paperlessGw) {
+      const plConfig = getPaperlessConfig();
+      if (!plConfig) {
+        throw new Error('Paperless is not configured. Set PAPERLESS_BASE_URL and PAPERLESS_API_TOKEN.');
+      }
+      paperlessGw = createPaperlessGatewayFromConfig(plConfig);
+    }
     return paperlessGw;
+  }
+
+  function getHybridSearchService() {
+    if (!hybridSearch) {
+      const plGw = getPaperlessGateway();
+      let semanticService: DocumentSemanticSearchService | null = null;
+
+      const vecConfig = getVectorConfig();
+      if (vecConfig) {
+        try {
+          const qdrant = getQdrantClient(vecConfig);
+          const embedding = new OpenAICompatibleEmbeddingService(vecConfig);
+          semanticService = new DocumentSemanticSearchService(qdrant, embedding, vecConfig);
+        } catch (err) {
+          console.error('[app] Failed to initialize semantic search:', err);
+        }
+      }
+
+      hybridSearch = new HybridDocumentSearchService(plGw, semanticService);
+    }
+    return hybridSearch;
   }
 }
 
