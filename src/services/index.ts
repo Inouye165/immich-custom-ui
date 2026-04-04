@@ -6,3 +6,5 @@ export type { TrashService } from './TrashService';
 export { ApiTrashService } from './ApiTrashService';
 export type { DocumentSearchService } from './DocumentSearchService';
 export { ApiDocumentSearchService } from './ApiDocumentSearchService';
+export type { IndexingStatusService } from './IndexingStatusService';
+export { ApiIndexingStatusService } from './ApiIndexingStatusService';

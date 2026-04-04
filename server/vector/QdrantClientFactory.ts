@@ -13,7 +13,7 @@ export function getQdrantClient(config: VectorConfig): QdrantClient {
   cachedClient = new QdrantClient({
     url: config.qdrantUrl,
     apiKey: config.qdrantApiKey,
-    timeout: 15_000,
+    timeout: 60_000,
   });
   cachedUrl = config.qdrantUrl;
   return cachedClient;

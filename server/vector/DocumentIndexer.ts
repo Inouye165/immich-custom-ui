@@ -4,6 +4,7 @@ import type { PaperlessGateway } from '../paperless/PaperlessGateway';
 import type { PaperlessDocument } from '../paperless/paperlessTypes';
 import type { EmbeddingService } from './EmbeddingService';
 import type { VectorConfig } from './VectorConfig';
+import type { IndexingStateStore } from './IndexingStateStore';
 import { chunkText } from './DocumentChunker';
 import { computeFingerprint } from './DocumentFingerprint';
 
@@ -46,19 +47,144 @@ export class DocumentIndexer {
   private readonly qdrant: QdrantClient;
   private readonly embedding: EmbeddingService;
   private readonly config: VectorConfig;
+  private readonly stateStore: IndexingStateStore | null;
+  private docCache = new Map<number, PaperlessDocument>();
 
   constructor(
     gateway: PaperlessGateway,
     qdrant: QdrantClient,
     embedding: EmbeddingService,
     config: VectorConfig,
+    stateStore?: IndexingStateStore,
   ) {
     this.gateway = gateway;
     this.qdrant = qdrant;
     this.embedding = embedding;
     this.config = config;
+    this.stateStore = stateStore ?? null;
   }
 
+  /**
+   * Scan Paperless and update the state store with pending/indexed status.
+   * Does not embed anything — just bookkeeping.
+   */
+  async scanAndSyncState(): Promise<void> {
+    if (!this.stateStore) return;
+
+    await this.ensureCollection();
+    const existingFingerprints = await this.loadExistingFingerprints();
+    const seenDocIds = new Set<number>();
+
+    let page = 1;
+    let hasMore = true;
+    while (hasMore) {
+      let response;
+      try {
+        response = await this.gateway.listDocuments(page);
+      } catch {
+        break;
+      }
+
+      for (const doc of response.results) {
+        seenDocIds.add(doc.id);
+        this.docCache.set(doc.id, doc);
+
+        const content = doc.content?.trim() ?? '';
+        const textForIndexing = content.length > 20
+          ? content
+          : [doc.title, content, doc.created].filter(Boolean).join(' — ');
+
+        const fingerprint = computeFingerprint({
+          id: doc.id,
+          title: doc.title,
+          content: textForIndexing,
+          created: doc.created,
+          modified: doc.modified,
+        });
+
+        const existingFp = existingFingerprints.get(doc.id);
+        const currentRecord = this.stateStore.getRecord(doc.id);
+
+        if (existingFp === fingerprint) {
+          // Already indexed with matching fingerprint
+          if (!currentRecord || currentRecord.status !== 'indexed') {
+            this.stateStore.upsertRecord({
+              documentId: doc.id,
+              title: doc.title,
+              fingerprint,
+              status: 'indexed',
+              retryCount: 0,
+              lastAttemptAt: null,
+              lastSuccessAt: new Date().toISOString(),
+              lastError: null,
+              nextRetryAt: null,
+            });
+          }
+        } else if (!currentRecord || currentRecord.fingerprint !== fingerprint ||
+                   currentRecord.status === 'indexed') {
+          // New or changed document — mark pending
+          this.stateStore.markPending(doc.id, doc.title, fingerprint);
+        }
+        // If already pending/failed/rate-limited with same fingerprint, leave it alone
+      }
+
+      hasMore = response.next !== null;
+      page++;
+    }
+
+    // Remove state records for documents no longer in Paperless
+    for (const record of this.stateStore.getAllRecords()) {
+      if (!seenDocIds.has(record.documentId)) {
+        this.stateStore.removeRecord(record.documentId);
+        try {
+          await this.deleteDocumentPoints(record.documentId);
+        } catch {
+          // Orphan cleanup is best-effort
+        }
+      }
+    }
+  }
+
+  /** Index a single document by ID. Used by the batch scheduler. */
+  async indexSingleDocument(docId: number): Promise<void> {
+    await this.ensureCollection();
+
+    let doc = this.docCache.get(docId);
+    if (!doc) {
+      // Fetch the specific page; Paperless doesn't have a get-by-id, scan until found
+      let page = 1;
+      let found = false;
+      while (!found) {
+        const response = await this.gateway.listDocuments(page);
+        for (const d of response.results) {
+          this.docCache.set(d.id, d);
+          if (d.id === docId) {
+            doc = d;
+            found = true;
+          }
+        }
+        if (response.next === null) break;
+        page++;
+      }
+    }
+
+    if (!doc) {
+      throw new Error(`Document ${docId} not found in Paperless.`);
+    }
+
+    const existingFingerprints = await this.loadExistingFingerprints();
+    const report: IndexReport = {
+      scanned: 1, indexed: 0, skipped: 0, updated: 0, deleted: 0, failed: 0, durationMs: 0,
+    };
+
+    await this.processDocument(doc, existingFingerprints, report);
+
+    if (report.failed > 0) {
+      throw new Error(`Indexing failed for document ${docId}`);
+    }
+  }
+
+  /** Full index run (used by CLI). */
   async runFullIndex(): Promise<IndexReport> {
     const start = Date.now();
     const report: IndexReport = {
@@ -66,12 +192,9 @@ export class DocumentIndexer {
     };
 
     await this.ensureCollection();
-
-    // Build map of existing fingerprints in Qdrant
     const existingFingerprints = await this.loadExistingFingerprints();
     const seenDocIds = new Set<number>();
 
-    // Page through all Paperless documents
     let page = 1;
     let hasMore = true;
 
@@ -85,7 +208,8 @@ export class DocumentIndexer {
         break;
       }
 
-      for (const doc of response.results) {
+      for (let i = 0; i < response.results.length; i++) {
+        const doc = response.results[i];
         report.scanned++;
         seenDocIds.add(doc.id);
 
@@ -95,13 +219,16 @@ export class DocumentIndexer {
           console.error(`[indexer] Failed to process document ${doc.id}:`, err);
           report.failed++;
         }
+
+        if (i < response.results.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
       }
 
       hasMore = response.next !== null;
       page++;
     }
 
-    // Delete orphaned points from documents that are no longer in Paperless
     const orphanedIds = [...existingFingerprints.keys()].filter(
       (docId) => !seenDocIds.has(docId),
     );
@@ -126,7 +253,6 @@ export class DocumentIndexer {
     );
     if (exists) return;
 
-    // Detect dimensions from a test embedding
     const testVectors = await this.embedding.embed(['test']);
     const dimensions = testVectors[0]?.length;
     if (!dimensions) {
@@ -144,7 +270,6 @@ export class DocumentIndexer {
     let offset: string | number | undefined = undefined;
     const limit = 100;
 
-    // Scroll through all points to build fingerprint map
     while (true) {
       const result = await this.qdrant.scroll(this.config.collection, {
         limit,
@@ -173,7 +298,6 @@ export class DocumentIndexer {
     report: IndexReport,
   ): Promise<void> {
     const content = doc.content?.trim() ?? '';
-    // Fall back to title + metadata if content is sparse
     const textForIndexing = content.length > 20
       ? content
       : [doc.title, content, doc.created].filter(Boolean).join(' — ');
@@ -194,7 +318,6 @@ export class DocumentIndexer {
 
     const isUpdate = existingFp !== undefined;
 
-    // Delete previous chunks if this is an update
     if (isUpdate) {
       await this.deleteDocumentPoints(doc.id);
     }
@@ -210,7 +333,6 @@ export class DocumentIndexer {
       return;
     }
 
-    // Batch embed chunks
     const vectors = await this.embedInBatches(chunks.map((c) => c.text));
 
     const now = new Date().toISOString();
@@ -246,6 +368,9 @@ export class DocumentIndexer {
   private async embedInBatches(texts: string[]): Promise<number[][]> {
     const results: number[][] = [];
     for (let i = 0; i < texts.length; i += this.config.indexBatchSize) {
+      if (i > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
       const batch = texts.slice(i, i + this.config.indexBatchSize);
       const vectors = await this.embedding.embed(batch);
       results.push(...vectors);

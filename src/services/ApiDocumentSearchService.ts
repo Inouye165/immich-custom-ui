@@ -23,6 +23,14 @@ export class ApiDocumentSearchService implements DocumentSearchService {
     }
     return (await response.json()) as DocumentSearchResponse;
   }
+
+  async deleteDocument(id: number): Promise<void> {
+    const response = await fetch(`/api/documents/${id}`, { method: 'DELETE' });
+    if (!response.ok) {
+      const payload = (await safeParseJson(response)) as ErrorResponse | null;
+      throw new Error(payload?.message?.trim() || 'Failed to delete document.');
+    }
+  }
 }
 
 async function safeParseJson(response: Response): Promise<unknown> {

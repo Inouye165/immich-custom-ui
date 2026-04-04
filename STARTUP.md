@@ -66,4 +66,5 @@ The indexer pages through all Paperless documents, chunks their text, generates 
 | Timestamp | Issue | Fix |
 | --- | --- | --- |
 | 2026-04-02 07:00:00 | Overpass primary endpoint timed out while looking up POIs for a Yellowstone asset. | Added fallback Overpass mirrors and retained graceful UI degradation when all mirrors are unavailable. |
-| 2026-04-02 08:25:00 | `docker info` wrote a non-fatal warning to stderr and PowerShell treated it as a terminating startup error. | Switched Docker readiness checks to a shell-level exit-code probe so warnings do not abort startup. |
+| 2026-04-02 08:25:00 | `docker info` wrote a non-fatal warning to stderr and PowerShell treated it as a terminating startup error. | Switched Docker readiness checks to a shell-level exit-code probe so warnings do not abort startup. || 2026-04-03 17:43:51 | Docker was not running at startup. | Started Docker Desktop and waited for docker info to succeed. |
+| 2026-04-03 19:57:46 | Docker was not running at startup. | Started Docker Desktop and waited for docker info to succeed. |

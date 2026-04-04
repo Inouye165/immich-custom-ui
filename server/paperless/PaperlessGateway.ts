@@ -7,6 +7,7 @@ export interface PaperlessGateway {
   listDocuments(page?: number): Promise<PaperlessSearchResponse>;
   fetchThumbnail(documentId: number): Promise<Response>;
   fetchPreview(documentId: number): Promise<Response>;
+  deleteDocument(documentId: number): Promise<void>;
 }
 
 export class LivePaperlessGateway implements PaperlessGateway {
@@ -67,6 +68,16 @@ export class LivePaperlessGateway implements PaperlessGateway {
       throw await buildUpstreamError(response, 'document-preview');
     }
     return response;
+  }
+
+  async deleteDocument(documentId: number): Promise<void> {
+    const response = await fetch(
+      `${this.baseUrl}/api/documents/${documentId}/`,
+      { method: 'DELETE', headers: this.headers() },
+    );
+    if (!response.ok) {
+      throw await buildUpstreamError(response, 'document-delete');
+    }
   }
 }
 

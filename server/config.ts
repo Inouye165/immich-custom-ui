@@ -34,6 +34,13 @@ const envSchema = z.object({
   DOCUMENT_INDEX_CHUNK_SIZE: z.coerce.number().int().min(100).max(10000).default(1000),
   DOCUMENT_INDEX_CHUNK_OVERLAP: z.coerce.number().int().min(0).max(2000).default(200),
   VECTOR_SCHEMA_VERSION: z.preprocess(blankToUndefined, z.string().min(1).optional()),
+  DOCUMENT_INDEX_AUTO_ENABLED: z.preprocess(blankToUndefined, z.string().optional()),
+  DOCUMENT_INDEX_AUTO_INTERVAL_MINUTES: z.coerce.number().int().min(1).max(1440).default(15),
+  DOCUMENT_EMBED_REQUESTS_PER_MINUTE: z.coerce.number().int().min(1).max(600).default(10),
+  DOCUMENT_EMBED_COOLDOWN_MINUTES: z.coerce.number().int().min(1).max(60).default(5),
+  DOCUMENT_EMBED_MAX_RETRIES: z.coerce.number().int().min(1).max(20).default(5),
+  DOCUMENT_EMBED_BACKOFF_BASE_MS: z.coerce.number().int().min(100).max(60000).default(2000),
+  DOCUMENT_EMBED_BACKOFF_MAX_MS: z.coerce.number().int().min(1000).max(600000).default(120000),
 });
 
 export class ConfigurationError extends Error {
@@ -74,6 +81,13 @@ export interface VectorConfig {
   indexChunkSize: number;
   indexChunkOverlap: number;
   schemaVersion: string;
+  autoIndexEnabled: boolean;
+  autoIndexIntervalMinutes: number;
+  embedRequestsPerMinute: number;
+  embedCooldownMinutes: number;
+  embedMaxRetries: number;
+  embedBackoffBaseMs: number;
+  embedBackoffMaxMs: number;
 }
 
 export function getPort(): number {
@@ -143,6 +157,13 @@ export function getVectorConfig(): VectorConfig | null {
     indexChunkSize: parsed.DOCUMENT_INDEX_CHUNK_SIZE,
     indexChunkOverlap: parsed.DOCUMENT_INDEX_CHUNK_OVERLAP,
     schemaVersion: parsed.VECTOR_SCHEMA_VERSION ?? 'v1',
+    autoIndexEnabled: parsed.DOCUMENT_INDEX_AUTO_ENABLED?.toLowerCase() === 'true',
+    autoIndexIntervalMinutes: parsed.DOCUMENT_INDEX_AUTO_INTERVAL_MINUTES,
+    embedRequestsPerMinute: parsed.DOCUMENT_EMBED_REQUESTS_PER_MINUTE,
+    embedCooldownMinutes: parsed.DOCUMENT_EMBED_COOLDOWN_MINUTES,
+    embedMaxRetries: parsed.DOCUMENT_EMBED_MAX_RETRIES,
+    embedBackoffBaseMs: parsed.DOCUMENT_EMBED_BACKOFF_BASE_MS,
+    embedBackoffMaxMs: parsed.DOCUMENT_EMBED_BACKOFF_MAX_MS,
   };
 }
 

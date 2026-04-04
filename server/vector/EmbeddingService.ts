@@ -11,6 +11,10 @@ interface EmbeddingApiResponse {
   usage?: { prompt_tokens: number; total_tokens: number };
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Calls any OpenAI-compatible /v1/embeddings endpoint.
  * Works with OpenAI, Ollama, vLLM, LiteLLM, and similar providers.
@@ -42,35 +46,50 @@ export class OpenAICompatibleEmbeddingService implements EmbeddingService {
       headers['Authorization'] = `Bearer ${this.apiKey}`;
     }
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const maxRetries = 5;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ model: this.model, input: texts }),
-        signal: controller.signal,
-      });
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ model: this.model, input: texts }),
+          signal: controller.signal,
+        });
 
-      if (!response.ok) {
-        const detail = await response.text().catch(() => '');
-        throw new Error(
-          `Embedding request failed (${response.status}): ${detail.slice(0, 200)}`,
-        );
+        if (response.status === 429 || (response.status >= 500 && response.status < 600)) {
+          clearTimeout(timer);
+          if (attempt < maxRetries) {
+            const backoff = Math.min(2 ** attempt * 2000, 60_000);
+            console.warn(`[embed] ${response.status} on attempt ${attempt + 1}, retrying in ${backoff}ms...`);
+            await delay(backoff);
+            continue;
+          }
+        }
+
+        if (!response.ok) {
+          const detail = await response.text().catch(() => '');
+          throw new Error(
+            `Embedding request failed (${response.status}): ${detail.slice(0, 200)}`,
+          );
+        }
+
+        const json = (await response.json()) as EmbeddingApiResponse;
+        const sorted = json.data.sort((a, b) => a.index - b.index);
+        const vectors = sorted.map((d) => d.embedding);
+
+        if (vectors.length > 0 && vectors[0].length > 0) {
+          this.detectedDimensions = vectors[0].length;
+        }
+
+        return vectors;
+      } finally {
+        clearTimeout(timer);
       }
-
-      const json = (await response.json()) as EmbeddingApiResponse;
-      const sorted = json.data.sort((a, b) => a.index - b.index);
-      const vectors = sorted.map((d) => d.embedding);
-
-      if (vectors.length > 0 && vectors[0].length > 0) {
-        this.detectedDimensions = vectors[0].length;
-      }
-
-      return vectors;
-    } finally {
-      clearTimeout(timer);
     }
+
+    throw new Error('Embedding request failed: max retries exceeded');
   }
 }

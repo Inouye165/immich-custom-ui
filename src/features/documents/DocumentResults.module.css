@@ -36,8 +36,7 @@
   overflow: hidden;
   background: #fffef9;
   border: 1px solid rgba(184, 151, 72, 0.18);
-  text-decoration: none;
-  color: inherit;
+  position: relative;
   transition: box-shadow 0.2s, transform 0.2s;
 }
 
@@ -46,9 +45,68 @@
   transform: translateY(-2px);
 }
 
-.card:focus-visible {
+.cardSelected {
+  border-color: #b33b3b;
+  box-shadow: 0 0 0 2px rgba(179, 59, 59, 0.35);
+}
+
+.cardLink {
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  color: inherit;
+}
+
+.cardLink:focus-visible {
   outline: 2px solid #0e8d96;
   outline-offset: 2px;
+}
+
+.selectOverlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.selectCheckbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #b33b3b;
+  cursor: pointer;
+}
+
+.deleteButton {
+  padding: 0.45rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(179, 59, 59, 0.35);
+  background: rgba(179, 59, 59, 0.08);
+  color: #a03030;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background: rgba(179, 59, 59, 0.16);
+  color: #802020;
+}
+
+.deleteButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .thumbnailWrap {
@@ -63,6 +121,16 @@
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.thumbnailFallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #a09882;
+  background: #eae6dc;
 }
 
 .docChip {

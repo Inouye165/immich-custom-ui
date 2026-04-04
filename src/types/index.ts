@@ -10,3 +10,10 @@ export type {
 	AssetWeather,
 	NearbyPoi,
 } from './assetContext';
+export type {
+	IndexingStatus,
+	DocumentIndexingRecord,
+	IndexingSummary,
+	IndexingRecordsResponse,
+	BatchResult,
+} from './indexing';
