@@ -106,6 +106,16 @@ export class DocumentIndexer {
         const currentRecord = this.stateStore.getRecord(doc.id);
 
         if (existingFp === fingerprint) {
+          const hasPartialProgress =
+            currentRecord?.fingerprint === fingerprint &&
+            currentRecord.totalChunks !== null &&
+            currentRecord.completedChunks !== null &&
+            currentRecord.completedChunks < currentRecord.totalChunks;
+
+          if (hasPartialProgress) {
+            continue;
+          }
+
           // Already indexed with matching fingerprint
           if (!currentRecord || currentRecord.status !== 'indexed') {
             this.stateStore.upsertRecord({
@@ -113,6 +123,8 @@ export class DocumentIndexer {
               title: doc.title,
               fingerprint,
               status: 'indexed',
+              totalChunks: currentRecord?.totalChunks ?? null,
+              completedChunks: currentRecord?.totalChunks ?? currentRecord?.completedChunks ?? null,
               retryCount: 0,
               lastAttemptAt: null,
               lastSuccessAt: new Date().toISOString(),
@@ -253,7 +265,7 @@ export class DocumentIndexer {
     );
     if (exists) return;
 
-    const testVectors = await this.embedding.embed(['test']);
+    const testVectors = await this.embedding.embed(['test'], 'document');
     const dimensions = testVectors[0]?.length;
     if (!dimensions) {
       throw new Error('Could not detect embedding dimensions.');
@@ -312,15 +324,20 @@ export class DocumentIndexer {
 
     const existingFp = existingFingerprints.get(doc.id);
     if (existingFp === fingerprint) {
-      report.skipped++;
-      return;
+      const currentRecord = this.stateStore?.getRecord(doc.id);
+      const hasPartialProgress =
+        currentRecord?.fingerprint === fingerprint &&
+        currentRecord.totalChunks !== null &&
+        currentRecord.completedChunks !== null &&
+        currentRecord.completedChunks < currentRecord.totalChunks;
+
+      if (!hasPartialProgress) {
+        report.skipped++;
+        return;
+      }
     }
 
     const isUpdate = existingFp !== undefined;
-
-    if (isUpdate) {
-      await this.deleteDocumentPoints(doc.id);
-    }
 
     const chunks = chunkText(
       textForIndexing,
@@ -333,30 +350,28 @@ export class DocumentIndexer {
       return;
     }
 
-    const vectors = await this.embedInBatches(chunks.map((c) => c.text));
+    const currentRecord = this.stateStore?.getRecord(doc.id);
+    const resumeFromChunk =
+      currentRecord?.fingerprint === fingerprint && currentRecord.completedChunks !== null
+        ? currentRecord.completedChunks
+        : 0;
 
-    const now = new Date().toISOString();
-    const points = chunks.map((chunk, i) => ({
-      id: buildPointId(doc.id, chunk.index, this.config.schemaVersion),
-      vector: vectors[i],
-      payload: {
-        documentId: doc.id,
-        chunkIndex: chunk.index,
-        documentTitle: doc.title,
-        fingerprint,
-        embeddingModel: this.config.embeddingModel,
-        schemaVersion: this.config.schemaVersion,
-        indexedAt: now,
-        sourceCreatedAt: doc.created,
-        sourceUpdatedAt: doc.modified ?? doc.added,
-        correspondent: doc.correspondent,
-        documentType: doc.document_type,
-        tags: doc.tags ?? [],
-        chunkText: chunk.text.slice(0, 500),
-      } satisfies PointPayload,
-    }));
+    if (resumeFromChunk >= chunks.length) {
+      this.stateStore?.markIndexed(doc.id);
+      if (isUpdate) {
+        report.updated++;
+      } else {
+        report.indexed++;
+      }
+      return;
+    }
 
-    await this.qdrant.upsert(this.config.collection, { points });
+    if (isUpdate && resumeFromChunk === 0) {
+      await this.deleteDocumentPoints(doc.id);
+    }
+
+    this.stateStore?.setChunkProgress(doc.id, doc.title, fingerprint, chunks.length, resumeFromChunk);
+    await this.embedAndUpsertChunks(doc, fingerprint, chunks, resumeFromChunk);
 
     if (isUpdate) {
       report.updated++;
@@ -365,17 +380,49 @@ export class DocumentIndexer {
     }
   }
 
-  private async embedInBatches(texts: string[]): Promise<number[][]> {
-    const results: number[][] = [];
-    for (let i = 0; i < texts.length; i += this.config.indexBatchSize) {
-      if (i > 0) {
+  private async embedAndUpsertChunks(
+    doc: PaperlessDocument,
+    fingerprint: string,
+    chunks: ReturnType<typeof chunkText>,
+    resumeFromChunk: number,
+  ): Promise<void> {
+    for (let start = resumeFromChunk; start < chunks.length; start += this.config.indexBatchSize) {
+      if (start > resumeFromChunk) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
-      const batch = texts.slice(i, i + this.config.indexBatchSize);
-      const vectors = await this.embedding.embed(batch);
-      results.push(...vectors);
+
+      const batchChunks = chunks.slice(start, start + this.config.indexBatchSize);
+      const vectors = await this.embedding.embed(batchChunks.map((chunk) => chunk.text), 'document');
+      const now = new Date().toISOString();
+      const points = batchChunks.map((chunk, index) => ({
+        id: buildPointId(doc.id, chunk.index, this.config.schemaVersion),
+        vector: vectors[index],
+        payload: {
+          documentId: doc.id,
+          chunkIndex: chunk.index,
+          documentTitle: doc.title,
+          fingerprint,
+          embeddingModel: this.config.embeddingModel,
+          schemaVersion: this.config.schemaVersion,
+          indexedAt: now,
+          sourceCreatedAt: doc.created,
+          sourceUpdatedAt: doc.modified ?? doc.added,
+          correspondent: doc.correspondent,
+          documentType: doc.document_type,
+          tags: doc.tags ?? [],
+          chunkText: chunk.text.slice(0, 500),
+        } satisfies PointPayload,
+      }));
+
+      await this.qdrant.upsert(this.config.collection, { points });
+      this.stateStore?.setChunkProgress(
+        doc.id,
+        doc.title,
+        fingerprint,
+        chunks.length,
+        start + batchChunks.length,
+      );
     }
-    return results;
   }
 
   private async deleteDocumentPoints(docId: number): Promise<void> {

@@ -38,7 +38,7 @@ export class DocumentSemanticSearchService {
   }
 
   async searchSemantic(query: string, limit = 20): Promise<SemanticDocHit[]> {
-    const [queryVector] = await this.embedding.embed([query]);
+    const [queryVector] = await this.embedding.embed([query], 'query');
 
     // Retrieve more chunks than the doc limit to ensure good aggregation
     const chunkLimit = Math.min(limit * 5, 100);

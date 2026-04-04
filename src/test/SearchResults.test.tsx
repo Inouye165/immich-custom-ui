@@ -182,6 +182,7 @@ describe('SearchResults', () => {
 
     rerender(
       <SearchResults
+        isAlbumWorkspaceOpen={false}
         canAddMoreFeatured={true}
         draftAlbumPhotoIds={[]}
         featuredAssetIds={['1']}

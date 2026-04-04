@@ -31,6 +31,7 @@ const envSchema = z.object({
   DOCUMENT_EMBEDDING_API_KEY: z.preprocess(blankToUndefined, z.string().min(1).optional()),
   DOCUMENT_EMBEDDING_BASE_URL: z.preprocess(blankToUndefined, z.string().url().optional()),
   DOCUMENT_INDEX_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(50),
+  DOCUMENT_SCHEDULER_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(5),
   DOCUMENT_INDEX_CHUNK_SIZE: z.coerce.number().int().min(100).max(10000).default(1000),
   DOCUMENT_INDEX_CHUNK_OVERLAP: z.coerce.number().int().min(0).max(2000).default(200),
   VECTOR_SCHEMA_VERSION: z.preprocess(blankToUndefined, z.string().min(1).optional()),
@@ -78,6 +79,7 @@ export interface VectorConfig {
   embeddingApiKey?: string;
   embeddingBaseUrl?: string;
   indexBatchSize: number;
+  schedulerBatchSize: number;
   indexChunkSize: number;
   indexChunkOverlap: number;
   schemaVersion: string;
@@ -154,6 +156,7 @@ export function getVectorConfig(): VectorConfig | null {
     embeddingApiKey: parsed.DOCUMENT_EMBEDDING_API_KEY,
     embeddingBaseUrl: parsed.DOCUMENT_EMBEDDING_BASE_URL?.replace(/\/$/, ''),
     indexBatchSize: parsed.DOCUMENT_INDEX_BATCH_SIZE,
+    schedulerBatchSize: parsed.DOCUMENT_SCHEDULER_BATCH_SIZE,
     indexChunkSize: parsed.DOCUMENT_INDEX_CHUNK_SIZE,
     indexChunkOverlap: parsed.DOCUMENT_INDEX_CHUNK_OVERLAP,
     schemaVersion: parsed.VECTOR_SCHEMA_VERSION ?? 'v1',

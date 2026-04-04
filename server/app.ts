@@ -3,7 +3,13 @@ import type { Response } from 'express';
 import { ZodError } from 'zod';
 import { buildAssetContext } from './assets/buildAssetContext';
 import { assetContextQuerySchema, assetParamsSchema, trashRequestSchema } from './assets/assetSchemas';
-import { getServerConfig, getPaperlessConfig, getVectorConfig, type ServerConfig } from './config';
+import {
+  ConfigurationError,
+  getServerConfig,
+  getPaperlessConfig,
+  getVectorConfig,
+  type ServerConfig,
+} from './config';
 import {
   createLiveImmichGateway,
   isRecoverableServerError,
@@ -31,7 +37,7 @@ import {
 } from './paperless/paperlessSchemas';
 import { HybridDocumentSearchService } from './vector/HybridDocumentSearchService';
 import { DocumentSemanticSearchService } from './vector/DocumentSemanticSearchService';
-import { OpenAICompatibleEmbeddingService } from './vector/EmbeddingService';
+import { createEmbeddingService } from './vector/EmbeddingService';
 import { getQdrantClient } from './vector/QdrantClientFactory';
 import { IndexingStateStore } from './vector/IndexingStateStore';
 import { EmbeddingRateLimiter } from './vector/EmbeddingRateLimiter';
@@ -334,7 +340,9 @@ export function createApp(dependencies: AppDependencies = {}) {
     if (!paperlessGw) {
       const plConfig = getPaperlessConfig();
       if (!plConfig) {
-        throw new Error('Paperless is not configured. Set PAPERLESS_BASE_URL and PAPERLESS_API_TOKEN.');
+        throw new ConfigurationError(
+          'Paperless document search is not configured. Set PAPERLESS_BASE_URL and PAPERLESS_API_TOKEN.',
+        );
       }
       paperlessGw = createPaperlessGatewayFromConfig(plConfig);
     }
@@ -350,7 +358,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       if (vecConfig) {
         try {
           const qdrant = getQdrantClient(vecConfig);
-          const embedding = new OpenAICompatibleEmbeddingService(vecConfig);
+          const embedding = createEmbeddingService(vecConfig);
           semanticService = new DocumentSemanticSearchService(qdrant, embedding, vecConfig);
         } catch (err) {
           console.error('[app] Failed to initialize semantic search:', err);
@@ -366,6 +374,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     if (!indexingStore) {
       indexingStore = new IndexingStateStore();
       await indexingStore.load();
+      indexingStore.recoverInterruptedRecords();
     }
     return indexingStore;
   }
@@ -374,11 +383,13 @@ export function createApp(dependencies: AppDependencies = {}) {
     if (!batchScheduler) {
       const vecConfig = getVectorConfig();
       if (!vecConfig) {
-        throw new Error('Vector search is not configured. Enable DOCUMENT_VECTOR_ENABLED.');
+        throw new ConfigurationError(
+          'Vector search is not configured. Enable DOCUMENT_VECTOR_ENABLED.',
+        );
       }
       const plGw = getPaperlessGateway();
       const qdrant = getQdrantClient(vecConfig);
-      const rawEmbedding = new OpenAICompatibleEmbeddingService(vecConfig);
+      const rawEmbedding = createEmbeddingService(vecConfig);
       const rateLimiter = new EmbeddingRateLimiter(rawEmbedding, {
         requestsPerMinute: vecConfig.embedRequestsPerMinute,
         cooldownMinutes: vecConfig.embedCooldownMinutes,
@@ -391,8 +402,9 @@ export function createApp(dependencies: AppDependencies = {}) {
       batchScheduler = new BatchScheduler(indexer, store, {
         autoEnabled: vecConfig.autoIndexEnabled,
         intervalMinutes: vecConfig.autoIndexIntervalMinutes,
-        batchSize: vecConfig.indexBatchSize,
+        batchSize: vecConfig.schedulerBatchSize,
       });
+      batchScheduler.resumePendingRetry();
     }
     return batchScheduler;
   }
@@ -402,6 +414,12 @@ function handleError(error: unknown, res: Response) {
   if (error instanceof ZodError) {
     const issue = error.issues[0];
     res.status(400).json({ message: issue?.message ?? 'Invalid request.' });
+    return;
+  }
+
+  if (error instanceof ConfigurationError) {
+    console.error('[app] Configuration error:', error.message);
+    res.status(500).json({ message: error.message });
     return;
   }
 

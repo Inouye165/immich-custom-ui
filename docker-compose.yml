@@ -10,5 +10,64 @@ services:
       QDRANT__SERVICE__GRPC_PORT: 6334
     restart: unless-stopped
 
+  paperless-broker:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  paperless-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: paperless
+    volumes:
+      - paperless_db_data:/var/lib/postgresql/data
+
+  paperless-gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+    command:
+      - gotenberg
+      - --chromium-disable-javascript=true
+      - --chromium-allow-list=file:///tmp/.*
+
+  paperless-tika:
+    image: apache/tika:latest
+    restart: unless-stopped
+
+  paperless-webserver:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    restart: unless-stopped
+    depends_on:
+      - paperless-broker
+      - paperless-db
+      - paperless-gotenberg
+      - paperless-tika
+    ports:
+      - "8000:8000"
+    environment:
+      PAPERLESS_REDIS: redis://paperless-broker:6379
+      PAPERLESS_DBHOST: paperless-db
+      PAPERLESS_DBNAME: paperless
+      PAPERLESS_DBUSER: paperless
+      PAPERLESS_DBPASS: paperless
+      PAPERLESS_URL: http://localhost:8000
+      PAPERLESS_TIKA_ENABLED: 1
+      PAPERLESS_TIKA_ENDPOINT: http://paperless-tika:9998
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://paperless-gotenberg:3000
+      PAPERLESS_TIME_ZONE: UTC
+      PAPERLESS_OCR_LANGUAGE: eng
+    volumes:
+      - paperless_data:/usr/src/paperless/data
+      - paperless_media:/usr/src/paperless/media
+      - paperless_export:/usr/src/paperless/export
+      - paperless_consume:/usr/src/paperless/consume
+
 volumes:
   qdrant_storage:
+  paperless_db_data:
+  paperless_data:
+  paperless_media:
+  paperless_export:
+  paperless_consume:

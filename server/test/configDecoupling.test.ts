@@ -72,6 +72,10 @@ describe('getVectorConfig', () => {
     process.env.DOCUMENT_EMBEDDING_MODEL = 'text-embedding-3-small';
     process.env.DOCUMENT_EMBEDDING_API_KEY = 'sk-test';
     process.env.DOCUMENT_EMBEDDING_BASE_URL = 'https://api.openai.com/v1';
+    delete process.env.DOCUMENT_INDEX_BATCH_SIZE;
+    delete process.env.DOCUMENT_SCHEDULER_BATCH_SIZE;
+    delete process.env.DOCUMENT_INDEX_CHUNK_SIZE;
+    delete process.env.DOCUMENT_INDEX_CHUNK_OVERLAP;
 
     const config = getVectorConfig();
     expect(config).not.toBeNull();
@@ -80,6 +84,7 @@ describe('getVectorConfig', () => {
     expect(config!.embeddingModel).toBe('text-embedding-3-small');
     expect(config!.embeddingApiKey).toBe('sk-test');
     expect(config!.indexBatchSize).toBe(50);
+    expect(config!.schedulerBatchSize).toBe(5);
     expect(config!.indexChunkSize).toBe(1000);
     expect(config!.indexChunkOverlap).toBe(200);
     expect(config!.schemaVersion).toBe('v1');
