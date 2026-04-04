@@ -2,7 +2,7 @@ import { createApp } from './app';
 import { getPort, getVectorConfig, getPaperlessConfig } from './config';
 import { IndexingStateStore } from './vector/IndexingStateStore';
 import { EmbeddingRateLimiter } from './vector/EmbeddingRateLimiter';
-import { OpenAICompatibleEmbeddingService } from './vector/EmbeddingService';
+import { createEmbeddingService } from './vector/EmbeddingService';
 import { DocumentIndexer } from './vector/DocumentIndexer';
 import { BatchScheduler } from './vector/BatchScheduler';
 import { getQdrantClient } from './vector/QdrantClientFactory';
@@ -17,13 +17,14 @@ async function main() {
   const vecConfig = getVectorConfig();
   const plConfig = getPaperlessConfig();
 
-  if (vecConfig && plConfig && vecConfig.autoIndexEnabled) {
+  if (vecConfig && plConfig) {
     indexingStateStore = new IndexingStateStore();
     await indexingStateStore.load();
+    indexingStateStore.recoverInterruptedRecords();
 
     const plGw = createPaperlessGatewayFromConfig(plConfig);
     const qdrant = getQdrantClient(vecConfig);
-    const rawEmbedding = new OpenAICompatibleEmbeddingService(vecConfig);
+    const rawEmbedding = createEmbeddingService(vecConfig);
     const rateLimiter = new EmbeddingRateLimiter(rawEmbedding, {
       requestsPerMinute: vecConfig.embedRequestsPerMinute,
       cooldownMinutes: vecConfig.embedCooldownMinutes,
@@ -33,10 +34,11 @@ async function main() {
     });
     const indexer = new DocumentIndexer(plGw, qdrant, rateLimiter, vecConfig, indexingStateStore);
     batchScheduler = new BatchScheduler(indexer, indexingStateStore, {
-      autoEnabled: true,
+      autoEnabled: vecConfig.autoIndexEnabled,
       intervalMinutes: vecConfig.autoIndexIntervalMinutes,
-      batchSize: vecConfig.indexBatchSize,
+      batchSize: vecConfig.schedulerBatchSize,
     });
+    batchScheduler.resumePendingRetry();
     batchScheduler.start();
   }
 

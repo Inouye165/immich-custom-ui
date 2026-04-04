@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { IndexingStatus } from '../features/documents/IndexingStatus';
 import type { IndexingStatusService } from '../services/IndexingStatusService';
 import type { IndexingSummary, IndexingRecordsResponse, BatchResult } from '../types';
@@ -17,6 +17,10 @@ const MOCK_SUMMARY: IndexingSummary = {
   nextScheduledBatch: '2025-01-01T00:15:00.000Z',
 };
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 const MOCK_RECORDS: IndexingRecordsResponse = {
   records: [
     {
@@ -24,6 +28,8 @@ const MOCK_RECORDS: IndexingRecordsResponse = {
       title: 'Tax Return 2024',
       fingerprint: 'fp1',
       status: 'indexed',
+      totalChunks: 12,
+      completedChunks: 12,
       retryCount: 0,
       lastAttemptAt: null,
       lastSuccessAt: '2025-01-01T00:00:00.000Z',
@@ -35,6 +41,8 @@ const MOCK_RECORDS: IndexingRecordsResponse = {
       title: 'Failed Doc',
       fingerprint: 'fp2',
       status: 'failed',
+      totalChunks: 4,
+      completedChunks: 1,
       retryCount: 3,
       lastAttemptAt: '2025-01-01T00:05:00.000Z',
       lastSuccessAt: null,
@@ -78,13 +86,15 @@ describe('IndexingStatus', () => {
     render(<IndexingStatus service={service} />);
 
     await waitFor(() => {
-      expect(screen.getByText('42')).toBeInTheDocument();
+      expect(screen.getByRole('progressbar', { name: 'Indexing progress' })).toBeInTheDocument();
     });
     expect(screen.getByText('indexed')).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('pending')).toBeInTheDocument();
-    expect(screen.getByText('49')).toBeInTheDocument();
     expect(screen.getByText('total')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Indexing progress' })).toHaveAttribute('aria-valuenow', '44');
+    expect(screen.getByText('44 / 49 complete')).toBeInTheDocument();
+    expect(screen.getByText('Rate-limited')).toBeInTheDocument();
+    expect(screen.getByText('In progress')).toBeInTheDocument();
   });
 
   it('renders error state when summary fetch fails', async () => {
@@ -156,12 +166,38 @@ describe('IndexingStatus', () => {
   });
 
   it('renders last batch info', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-01-01T00:14:20.000Z'));
     const service = createMockService();
     render(<IndexingStatus service={service} />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/Batch complete\. Indexed: 5/)).toBeInTheDocument();
+    await act(async () => {
+      await Promise.resolve();
     });
+
+    expect(screen.getByText(/Batch complete\. Indexed: 5/)).toBeInTheDocument();
+    expect(screen.getByText(/Cooldown ends:/)).toBeInTheDocument();
+    expect(screen.getByText(/batching will resume automatically/i)).toBeInTheDocument();
+    expect(screen.getByText(/40s remaining/)).toBeInTheDocument();
+  });
+
+  it('updates the cooldown countdown over time', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-01-01T00:14:20.000Z'));
+    const service = createMockService();
+    render(<IndexingStatus service={service} />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText(/40s remaining/)).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+
+    expect(screen.getByText(/35s remaining/)).toBeInTheDocument();
   });
 
   it('shows error details for failed records', async () => {

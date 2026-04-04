@@ -1,7 +1,9 @@
 import type { VectorConfig } from './VectorConfig';
 
+export type EmbeddingPurpose = 'document' | 'query';
+
 export interface EmbeddingService {
-  embed(texts: string[]): Promise<number[][]>;
+  embed(texts: string[], purpose?: EmbeddingPurpose): Promise<number[][]>;
   dimensions(): number | undefined;
 }
 
@@ -13,6 +15,30 @@ interface EmbeddingApiResponse {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+interface GeminiBatchEmbedResponse {
+  embeddings?: Array<{
+    values?: number[];
+  }>;
+}
+
+function normalizeProvider(provider: string): string {
+  return provider.trim().toLowerCase();
+}
+
+function stripTrailingSlash(url: string): string {
+  return url.replace(/\/$/, '');
+}
+
+function resolveOpenAICompatibleBaseUrl(config: VectorConfig): string {
+  if (config.embeddingBaseUrl) {
+    return stripTrailingSlash(config.embeddingBaseUrl);
+  }
+
+  return normalizeProvider(config.embeddingProvider) === 'ollama'
+    ? 'http://localhost:11434/v1'
+    : 'https://api.openai.com/v1';
 }
 
 /**
@@ -28,7 +54,7 @@ export class OpenAICompatibleEmbeddingService implements EmbeddingService {
 
   constructor(config: VectorConfig, timeoutMs = 30_000) {
     this.model = config.embeddingModel;
-    this.baseUrl = config.embeddingBaseUrl ?? 'https://api.openai.com/v1';
+    this.baseUrl = resolveOpenAICompatibleBaseUrl(config);
     this.apiKey = config.embeddingApiKey;
     this.timeoutMs = timeoutMs;
   }
@@ -37,8 +63,9 @@ export class OpenAICompatibleEmbeddingService implements EmbeddingService {
     return this.detectedDimensions;
   }
 
-  async embed(texts: string[]): Promise<number[][]> {
+  async embed(texts: string[], purpose: EmbeddingPurpose = 'document'): Promise<number[][]> {
     if (texts.length === 0) return [];
+    void purpose;
 
     const url = `${this.baseUrl}/embeddings`;
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -92,4 +119,81 @@ export class OpenAICompatibleEmbeddingService implements EmbeddingService {
 
     throw new Error('Embedding request failed: max retries exceeded');
   }
+}
+
+export class GeminiEmbeddingService implements EmbeddingService {
+  private readonly model: string;
+  private readonly baseUrl: string;
+  private readonly apiKey: string | undefined;
+  private readonly timeoutMs: number;
+  private detectedDimensions: number | undefined;
+
+  constructor(config: VectorConfig, timeoutMs = 30_000) {
+    this.model = config.embeddingModel;
+    this.baseUrl = stripTrailingSlash(
+      config.embeddingBaseUrl ?? 'https://generativelanguage.googleapis.com/v1beta',
+    );
+    this.apiKey = config.embeddingApiKey ?? process.env.GEMINI_API_KEY;
+    this.timeoutMs = timeoutMs;
+  }
+
+  dimensions(): number | undefined {
+    return this.detectedDimensions;
+  }
+
+  async embed(texts: string[], purpose: EmbeddingPurpose = 'document'): Promise<number[][]> {
+    if (texts.length === 0) return [];
+
+    if (!this.apiKey) {
+      throw new Error('Gemini embedding API key is not configured. Set DOCUMENT_EMBEDDING_API_KEY or GEMINI_API_KEY.');
+    }
+
+    const url = `${this.baseUrl}/models/${this.model}:batchEmbedContents?key=${encodeURIComponent(this.apiKey)}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    const taskType = this.model === 'gemini-embedding-001'
+      ? (purpose === 'query' ? 'RETRIEVAL_QUERY' : 'RETRIEVAL_DOCUMENT')
+      : undefined;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requests: texts.map((text) => ({
+            model: `models/${this.model}`,
+            content: { parts: [{ text }] },
+            ...(taskType ? { taskType } : {}),
+          })),
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const detail = await response.text().catch(() => '');
+        throw new Error(
+          `Gemini embedding request failed (${response.status}): ${detail.slice(0, 200)}`,
+        );
+      }
+
+      const json = (await response.json()) as GeminiBatchEmbedResponse;
+      const vectors = (json.embeddings ?? []).map((entry) => entry.values ?? []);
+
+      if (vectors.length === 0 || vectors.some((vector) => vector.length === 0)) {
+        throw new Error('Gemini embedding response did not include usable vectors.');
+      }
+
+      this.detectedDimensions = vectors[0].length;
+      return vectors;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
+export function createEmbeddingService(config: VectorConfig): EmbeddingService {
+  return normalizeProvider(config.embeddingProvider) === 'gemini'
+    ? new GeminiEmbeddingService(config)
+    : new OpenAICompatibleEmbeddingService(config);
 }

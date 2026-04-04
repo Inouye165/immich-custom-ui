@@ -1,5 +1,5 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { EmbeddingRateLimiter, RateLimitError, MaxRetriesExceededError } from '../vector/EmbeddingRateLimiter';
+import { describe, expect, it, vi } from 'vitest';
+import { EmbeddingRateLimiter, RateLimitError } from '../vector/EmbeddingRateLimiter';
 import type { EmbeddingService } from '../vector/EmbeddingService';
 
 function createMockEmbedding(overrides: Partial<EmbeddingService> = {}): EmbeddingService {
@@ -16,7 +16,7 @@ describe('EmbeddingRateLimiter', () => {
     const limiter = new EmbeddingRateLimiter(inner, { requestsPerMinute: 10 });
     const result = await limiter.embed(['hello']);
     expect(result).toEqual([[0.1, 0.2, 0.3]]);
-    expect(inner.embed).toHaveBeenCalledWith(['hello']);
+    expect(inner.embed).toHaveBeenCalledWith(['hello'], 'document');
   });
 
   it('throws RateLimitError when local rate limit is reached', async () => {

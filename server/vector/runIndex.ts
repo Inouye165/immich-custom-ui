@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { getPaperlessConfig, getVectorConfig } from '../config';
 import { createPaperlessGatewayFromConfig } from '../paperless/PaperlessGateway';
-import { OpenAICompatibleEmbeddingService } from './EmbeddingService';
+import { createEmbeddingService } from './EmbeddingService';
 import { getQdrantClient } from './QdrantClientFactory';
 import { DocumentIndexer } from './DocumentIndexer';
 
@@ -20,6 +20,7 @@ async function main() {
 
   console.log('[docs:index] Starting incremental document index...');
   console.log(`  Collection : ${vectorConfig.collection}`);
+  console.log(`  Provider   : ${vectorConfig.embeddingProvider}`);
   console.log(`  Model      : ${vectorConfig.embeddingModel}`);
   console.log(`  Schema     : ${vectorConfig.schemaVersion}`);
   console.log(`  Chunk size : ${vectorConfig.indexChunkSize} (overlap: ${vectorConfig.indexChunkOverlap})`);
@@ -27,7 +28,7 @@ async function main() {
 
   const gateway = createPaperlessGatewayFromConfig(paperlessConfig);
   const qdrant = getQdrantClient(vectorConfig);
-  const embedding = new OpenAICompatibleEmbeddingService(vectorConfig);
+  const embedding = createEmbeddingService(vectorConfig);
 
   const indexer = new DocumentIndexer(gateway, qdrant, embedding, vectorConfig);
   const report = await indexer.runFullIndex();

@@ -211,6 +211,24 @@ describe('document search routes', () => {
 
     expect(paperless.searchDocuments).toHaveBeenCalledWith('invoice', 3);
   });
+
+  it('returns a clear configuration error when Paperless is not configured', async () => {
+    delete process.env.PAPERLESS_BASE_URL;
+    delete process.env.PAPERLESS_API_TOKEN;
+
+    const app = createApp({
+      immichGateway: createGatewayStub({}),
+    });
+
+    const response = await request(app)
+      .get('/api/documents/search')
+      .query({ query: 'vet info', mode: 'semantic' });
+
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe(
+      'Paperless document search is not configured. Set PAPERLESS_BASE_URL and PAPERLESS_API_TOKEN.',
+    );
+  });
 });
 
 describe('document delete route', () => {

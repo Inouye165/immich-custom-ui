@@ -37,7 +37,15 @@ What the shutdown script does:
 
 - Runtime state is stored in `.runtime/startup-state.json` and is ignored by git.
 - Persistent API cache files are stored in `.runtime/api-cache` and are ignored by git.
-- Docker is used for the Qdrant sidecar (`docker-compose.yml`). The startup script auto-discovers and runs compose files.
+- Docker is used for the Qdrant sidecar and an optional local Paperless-ngx stack (`docker-compose.yml`). The startup script auto-discovers and runs compose files.
+- Paperless listens on `http://localhost:8000` once its containers finish booting, but document search still requires a valid `PAPERLESS_API_TOKEN` in `.env`.
+- After first startup, create a Paperless superuser and API token with:
+
+```powershell
+docker compose exec paperless-webserver python manage.py createsuperuser
+docker compose exec paperless-webserver python manage.py drf_create_token <your-paperless-username>
+```
+
 - The startup log below is append-only and is intended to be hardened over time with real-world failures and fixes.
 
 ## Document Semantic Search (Qdrant)

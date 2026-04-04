@@ -5,6 +5,8 @@ export interface DocumentIndexingRecord {
   title: string;
   fingerprint: string;
   status: IndexingStatus;
+  totalChunks: number | null;
+  completedChunks: number | null;
   retryCount: number;
   lastAttemptAt: string | null;
   lastSuccessAt: string | null;

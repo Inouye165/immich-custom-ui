@@ -61,6 +61,23 @@ Notes:
 - The map and POI experience works without exposing secrets to the browser.
 - API responses from Immich and third-party enrichments are cached to reduce repeated upstream calls.
 - Persistent external API cache files are stored under `.runtime/api-cache` and survive app restarts unless you delete them.
+- `docker-compose.yml` includes Qdrant plus an optional local Paperless-ngx stack exposed on `http://localhost:8000`.
+- The Paperless containers do not mint an API token automatically. After the stack is up, create a superuser and token, then set `PAPERLESS_API_TOKEN` in `.env`.
+
+Paperless quick start:
+
+```powershell
+docker compose up -d paperless-webserver
+docker compose exec paperless-webserver python manage.py createsuperuser
+docker compose exec paperless-webserver python manage.py drf_create_token <your-paperless-username>
+```
+
+Then add these local settings:
+
+```env
+PAPERLESS_BASE_URL=http://localhost:8000
+PAPERLESS_API_TOKEN=<paste-generated-token-here>
+```
 
 ## Commands
 

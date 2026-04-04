@@ -143,7 +143,7 @@ export function createLiveImmichGateway(): ImmichGateway {
 
 async function buildUpstreamError(
   response: Response,
-  operation: 'asset-info' | 'asset-metadata' | 'search' | 'thumbnail',
+  operation: 'asset-info' | 'asset-metadata' | 'search' | 'thumbnail' | 'trash',
 ): Promise<UpstreamHttpError> {
   if (response.status === 401 || response.status === 403) {
     return new UpstreamHttpError(
@@ -159,7 +159,9 @@ async function buildUpstreamError(
         ? 'Thumbnail retrieval is unavailable right now.'
         : operation === 'asset-info'
           ? 'Asset details are unavailable right now.'
-          : 'Asset metadata is unavailable right now.';
+          : operation === 'trash'
+            ? 'Trash update is unavailable right now.'
+            : 'Asset metadata is unavailable right now.';
 
   try {
     const body = (await response.json()) as { message?: string };

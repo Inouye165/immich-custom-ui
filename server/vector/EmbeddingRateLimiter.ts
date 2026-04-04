@@ -1,4 +1,4 @@
-import type { EmbeddingService } from './EmbeddingService';
+import type { EmbeddingPurpose, EmbeddingService } from './EmbeddingService';
 
 export interface RateLimiterConfig {
   requestsPerMinute: number;
@@ -68,7 +68,11 @@ export class EmbeddingRateLimiter {
    * Throws RateLimitError if the provider rate-limits us.
    * Throws MaxRetriesExceededError if retries are exhausted.
    */
-  async embed(texts: string[], retryCount = 0): Promise<number[][]> {
+  async embed(
+    texts: string[],
+    purpose: EmbeddingPurpose = 'document',
+    retryCount = 0,
+  ): Promise<number[][]> {
     if (this.isCoolingDown()) {
       const waitMs = this.coolingUntil - Date.now();
       throw new RateLimitError(
@@ -96,7 +100,7 @@ export class EmbeddingRateLimiter {
     this.timestamps.push(now);
 
     try {
-      return await this.inner.embed(texts);
+      return await this.inner.embed(texts, purpose);
     } catch (err: unknown) {
       const is429 = this.isRateLimitResponse(err);
       if (is429) {
@@ -116,7 +120,7 @@ export class EmbeddingRateLimiter {
           this.config.backoffMaxMs,
         );
         await new Promise((resolve) => setTimeout(resolve, delay));
-        return this.embed(texts, retryCount + 1);
+        return this.embed(texts, purpose, retryCount + 1);
       }
 
       throw err;

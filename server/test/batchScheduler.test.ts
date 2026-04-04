@@ -1,8 +1,41 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { DocumentIndexingRecord, IndexingSummary } from '../vector/IndexingStateStore';
 import { BatchScheduler } from '../vector/BatchScheduler';
 import { IndexingStateStore } from '../vector/IndexingStateStore';
 import { DocumentIndexer } from '../vector/DocumentIndexer';
 import { RateLimitError } from '../vector/EmbeddingRateLimiter';
+
+function createRecord(overrides: Partial<DocumentIndexingRecord> = {}): DocumentIndexingRecord {
+  return {
+    documentId: 1,
+    title: 'Doc 1',
+    fingerprint: 'fp1',
+    status: 'pending',
+    totalChunks: null,
+    completedChunks: null,
+    retryCount: 0,
+    lastAttemptAt: null,
+    lastSuccessAt: null,
+    lastError: null,
+    nextRetryAt: null,
+    ...overrides,
+  };
+}
+
+function createSummary(overrides: Partial<IndexingSummary> = {}): IndexingSummary {
+  return {
+    pending: 0,
+    inProgress: 0,
+    indexed: 0,
+    failed: 0,
+    rateLimited: 0,
+    total: 0,
+    lastBatchAt: null,
+    lastBatchResult: null,
+    nextScheduledBatch: null,
+    ...overrides,
+  };
+}
 
 function createMockIndexer(): DocumentIndexer {
   return {
@@ -13,9 +46,9 @@ function createMockIndexer(): DocumentIndexer {
 }
 
 function createMockStateStore(): IndexingStateStore {
-  const records = new Map<number, { documentId: number; title: string; status: string }>();
   return {
     getRetryableRecords: vi.fn().mockReturnValue([]),
+    getEarliestRetryAt: vi.fn().mockReturnValue(null),
     markInProgress: vi.fn(),
     markIndexed: vi.fn(),
     markFailed: vi.fn(),
@@ -24,9 +57,13 @@ function createMockStateStore(): IndexingStateStore {
     setNextScheduledBatch: vi.fn(),
     flush: vi.fn().mockResolvedValue(undefined),
     getAllRecords: vi.fn().mockReturnValue([]),
-    getSummary: vi.fn().mockReturnValue({ pending: 0, indexed: 0, total: 0 }),
+    getSummary: vi.fn().mockReturnValue(createSummary()),
   } as unknown as IndexingStateStore;
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('BatchScheduler', () => {
   it('returns empty result when no retryable records exist', async () => {
@@ -45,8 +82,8 @@ describe('BatchScheduler', () => {
     const indexer = createMockIndexer();
     const store = createMockStateStore();
     vi.mocked(store.getRetryableRecords).mockReturnValue([
-      { documentId: 1, title: 'Doc 1', fingerprint: 'fp1', status: 'pending', retryCount: 0, lastAttemptAt: null, lastSuccessAt: null, lastError: null, nextRetryAt: null },
-      { documentId: 2, title: 'Doc 2', fingerprint: 'fp2', status: 'pending', retryCount: 0, lastAttemptAt: null, lastSuccessAt: null, lastError: null, nextRetryAt: null },
+      createRecord(),
+      createRecord({ documentId: 2, title: 'Doc 2', fingerprint: 'fp2' }),
     ]);
 
     const scheduler = new BatchScheduler(indexer, store, { autoEnabled: false, batchSize: 50 });
@@ -66,16 +103,49 @@ describe('BatchScheduler', () => {
 
     const store = createMockStateStore();
     vi.mocked(store.getRetryableRecords).mockReturnValue([
-      { documentId: 1, title: 'Doc 1', fingerprint: 'fp1', status: 'pending', retryCount: 0, lastAttemptAt: null, lastSuccessAt: null, lastError: null, nextRetryAt: null },
-      { documentId: 2, title: 'Doc 2', fingerprint: 'fp2', status: 'pending', retryCount: 0, lastAttemptAt: null, lastSuccessAt: null, lastError: null, nextRetryAt: null },
+      createRecord(),
+      createRecord({ documentId: 2, title: 'Doc 2', fingerprint: 'fp2' }),
     ]);
 
     const scheduler = new BatchScheduler(indexer, store, { autoEnabled: false });
     const result = await scheduler.runBatch();
 
     expect(result.stoppedByRateLimit).toBe(true);
-    expect(result.rateLimited).toBe(2);
-    expect(store.markRateLimited).toHaveBeenCalled();
+    expect(result.rateLimited).toBe(1);
+    expect(store.markRateLimited).toHaveBeenCalledTimes(1);
+  });
+
+  it('schedules an automatic retry after a rate limit cooldown', async () => {
+    vi.useFakeTimers();
+    const indexer = createMockIndexer();
+    vi.mocked(indexer.indexSingleDocument)
+      .mockRejectedValueOnce(new RateLimitError('429 rate limit', 5_000))
+      .mockResolvedValueOnce(undefined);
+
+    const store = createMockStateStore();
+    vi.mocked(store.getRetryableRecords)
+      .mockReturnValueOnce([
+        createRecord(),
+      ])
+      .mockReturnValueOnce([
+        createRecord({
+          status: 'rate-limited',
+          retryCount: 1,
+          lastError: '429 rate limit',
+          nextRetryAt: new Date(Date.now() + 5_000).toISOString(),
+        }),
+      ]);
+
+    const scheduler = new BatchScheduler(indexer, store, { autoEnabled: false });
+    await scheduler.runBatch();
+
+    expect(store.setNextScheduledBatch).toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(indexer.scanAndSyncState).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(indexer.indexSingleDocument)).toHaveBeenCalledTimes(2);
+    expect(store.markIndexed).toHaveBeenCalledWith(1);
   });
 
   it('marks failed on non-rate-limit errors', async () => {
@@ -86,7 +156,7 @@ describe('BatchScheduler', () => {
 
     const store = createMockStateStore();
     vi.mocked(store.getRetryableRecords).mockReturnValue([
-      { documentId: 1, title: 'Doc 1', fingerprint: 'fp1', status: 'pending', retryCount: 0, lastAttemptAt: null, lastSuccessAt: null, lastError: null, nextRetryAt: null },
+      createRecord(),
     ]);
 
     const scheduler = new BatchScheduler(indexer, store, { autoEnabled: false });
@@ -123,15 +193,11 @@ describe('BatchScheduler', () => {
     const indexer = createMockIndexer();
     const store = createMockStateStore();
     const records = Array.from({ length: 10 }, (_, i) => ({
-      documentId: i + 1,
-      title: `Doc ${i + 1}`,
-      fingerprint: `fp${i}`,
-      status: 'pending' as const,
-      retryCount: 0,
-      lastAttemptAt: null,
-      lastSuccessAt: null,
-      lastError: null,
-      nextRetryAt: null,
+      ...createRecord({
+        documentId: i + 1,
+        title: `Doc ${i + 1}`,
+        fingerprint: `fp${i}`,
+      }),
     }));
     vi.mocked(store.getRetryableRecords).mockReturnValue(records);
 
@@ -160,5 +226,58 @@ describe('BatchScheduler', () => {
     expect(store.setNextScheduledBatch).toHaveBeenCalled();
     scheduler.stop();
     expect(store.setNextScheduledBatch).toHaveBeenCalledWith(null);
+  });
+
+  it('rehydrates a persisted scheduled retry', async () => {
+    vi.useFakeTimers();
+    const indexer = createMockIndexer();
+    const store = createMockStateStore();
+    vi.mocked(store.getSummary).mockReturnValue(createSummary({
+      pending: 1,
+      rateLimited: 1,
+      total: 1,
+      nextScheduledBatch: new Date(Date.now() + 5_000).toISOString(),
+    }));
+    vi.mocked(store.getRetryableRecords).mockReturnValue([
+      createRecord({
+        status: 'rate-limited',
+        retryCount: 1,
+        lastError: '429 rate limit',
+        nextRetryAt: new Date(Date.now() - 1_000).toISOString(),
+      }),
+    ]);
+
+    const scheduler = new BatchScheduler(indexer, store, { autoEnabled: false });
+    scheduler.resumePendingRetry();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(indexer.scanAndSyncState).toHaveBeenCalledTimes(1);
+    expect(indexer.indexSingleDocument).toHaveBeenCalledTimes(1);
+  });
+
+  it('continues manual batch processing when more retryable work remains', async () => {
+    vi.useFakeTimers();
+    const indexer = createMockIndexer();
+    const store = createMockStateStore();
+    vi.mocked(store.getRetryableRecords)
+      .mockReturnValueOnce([
+        createRecord(),
+      ])
+      .mockReturnValueOnce([
+        createRecord({ documentId: 2, title: 'Doc 2', fingerprint: 'fp2' }),
+      ])
+      .mockReturnValueOnce([
+        createRecord({ documentId: 2, title: 'Doc 2', fingerprint: 'fp2' }),
+      ])
+      .mockReturnValueOnce([]);
+
+    const scheduler = new BatchScheduler(indexer, store, { autoEnabled: false });
+    await scheduler.runBatch();
+
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(indexer.scanAndSyncState).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(indexer.indexSingleDocument)).toHaveBeenCalledTimes(2);
   });
 });

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
-import type { AssetContextService, DocumentSearchService, IndexingStatusService, SearchService } from '../services';
+import type { AssetContextService, DocumentSearchService, SearchService } from '../services';
 
 vi.mock('../features/assets/AssetLocationMap', () => ({
   AssetLocationMap: () => <div data-testid="asset-location-map" />,
@@ -34,22 +34,6 @@ function createDocumentSearchService(
   return {
     searchDocuments: vi.fn().mockResolvedValue({ results: [], total: 0, hasMore: false }),
     deleteDocument: vi.fn().mockResolvedValue(undefined),
-    ...overrides,
-  };
-}
-
-function createIndexingStatusService(
-  overrides: Partial<IndexingStatusService> = {},
-): IndexingStatusService {
-  return {
-    getSummary: vi.fn().mockResolvedValue({
-      pending: 0, inProgress: 0, indexed: 0, failed: 0, rateLimited: 0, total: 0,
-      lastBatchAt: null, lastBatchResult: null, nextScheduledBatch: null,
-    }),
-    getRecords: vi.fn().mockResolvedValue({ records: [], total: 0, limit: 100, offset: 0 }),
-    triggerBatch: vi.fn().mockResolvedValue({
-      processed: 0, indexed: 0, skipped: 0, failed: 0, rateLimited: 0, durationMs: 0, stoppedByRateLimit: false,
-    }),
     ...overrides,
   };
 }
@@ -199,6 +183,36 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Search' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Search is unavailable right now.');
+  });
+
+  it('renders a clear document search error when the document archive is not configured', async () => {
+    const user = userEvent.setup();
+    const searchService = createSearchService({
+      search: vi.fn().mockResolvedValue(SEARCH_RESPONSE),
+    });
+    const assetContextService = createAssetContextService({
+      getAssetContext: vi.fn(),
+    });
+    const documentSearchService = createDocumentSearchService({
+      searchDocuments: vi.fn().mockRejectedValue(
+        new Error('Paperless document search is not configured. Set PAPERLESS_BASE_URL and PAPERLESS_API_TOKEN.'),
+      ),
+    });
+
+    render(
+      <App
+        assetContextService={assetContextService}
+        documentSearchService={documentSearchService}
+        searchService={searchService}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('Search'), 'vet info');
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Document search unavailable. Paperless document search is not configured. Set PAPERLESS_BASE_URL and PAPERLESS_API_TOKEN.',
+    );
   });
 
   it('opens asset details and renders metadata when a result is clicked', async () => {

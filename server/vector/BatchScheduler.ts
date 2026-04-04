@@ -1,8 +1,5 @@
-import type { PaperlessGateway } from '../paperless/PaperlessGateway';
-import type { QdrantClient } from '@qdrant/js-client-rest';
-import type { VectorConfig } from './VectorConfig';
 import type { IndexingStateStore } from './IndexingStateStore';
-import { EmbeddingRateLimiter, RateLimitError } from './EmbeddingRateLimiter';
+import { RateLimitError } from './EmbeddingRateLimiter';
 import { DocumentIndexer } from './DocumentIndexer';
 
 export interface BatchSchedulerConfig {
@@ -36,6 +33,7 @@ export class BatchScheduler {
   private readonly stateStore: IndexingStateStore;
   private readonly config: BatchSchedulerConfig;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private running = false;
   private stopped = false;
 
@@ -75,6 +73,7 @@ export class BatchScheduler {
       clearInterval(this.timer);
       this.timer = null;
     }
+    this.clearRetryTimer();
     this.stateStore.setNextScheduledBatch(null);
   }
 
@@ -87,6 +86,30 @@ export class BatchScheduler {
   }
 
   /**
+   * Recover a previously scheduled retry from persisted state.
+   * This keeps manual indexing flows alive across backend restarts.
+   */
+  resumePendingRetry(): void {
+    if (this.stopped) {
+      return;
+    }
+
+    const nextScheduledBatch = this.stateStore.getSummary().nextScheduledBatch;
+    if (!nextScheduledBatch) {
+      return;
+    }
+
+    const scheduledAt = new Date(nextScheduledBatch).getTime();
+    if (Number.isNaN(scheduledAt)) {
+      this.stateStore.setNextScheduledBatch(null);
+      return;
+    }
+
+    const waitMs = Math.max(scheduledAt - Date.now(), 0);
+    this.scheduleRetry(waitMs, false);
+  }
+
+  /**
    * Run one indexing batch. Single-flight: overlapping calls are ignored.
    * Safe to call manually from an API endpoint.
    */
@@ -95,6 +118,7 @@ export class BatchScheduler {
       return { processed: 0, indexed: 0, skipped: 0, failed: 0, rateLimited: 0, durationMs: 0, stoppedByRateLimit: false };
     }
 
+    this.clearRetryTimer();
     this.running = true;
     const start = Date.now();
     const result: BatchResult = {
@@ -127,13 +151,7 @@ export class BatchScheduler {
             this.stateStore.markRateLimited(record.documentId, nextRetry, err.message);
             result.rateLimited++;
             result.stoppedByRateLimit = true;
-
-            // Mark remaining batch items as rate-limited too
-            const remaining = batch.slice(batch.indexOf(record) + 1);
-            for (const r of remaining) {
-              this.stateStore.markRateLimited(r.documentId, nextRetry, 'Batch paused: provider rate limit.');
-              result.rateLimited++;
-            }
+            this.scheduleRetry(err.retryAfterMs, true);
             break;
           }
 
@@ -146,7 +164,7 @@ export class BatchScheduler {
       }
 
       const summary = result.stoppedByRateLimit
-        ? `Batch stopped by rate limit. Indexed: ${result.indexed}, rate-limited: ${result.rateLimited}`
+        ? `Batch stopped by rate limit. Indexed: ${result.indexed}, rate-limited: ${result.rateLimited}, pending carryover: ${Math.max(batch.length - result.processed, 0)}`
         : `Batch complete. Indexed: ${result.indexed}, failed: ${result.failed}, skipped: ${result.skipped}`;
       this.stateStore.setLastBatch(summary);
     } catch (err: unknown) {
@@ -156,8 +174,23 @@ export class BatchScheduler {
     } finally {
       result.durationMs = Date.now() - start;
       this.running = false;
-      if (this.config.autoEnabled && !this.stopped) {
+      if (result.stoppedByRateLimit) {
+        // A one-off retry has already been scheduled after the provider cooldown.
+      } else if (!this.config.autoEnabled && !this.stopped) {
+        const remainingRetryable = this.stateStore.getRetryableRecords().length;
+        const earliestRetryAt = this.stateStore.getEarliestRetryAt();
+
+        if (remainingRetryable > 0) {
+          this.scheduleRetry(1_000, true);
+        } else if (earliestRetryAt) {
+          this.scheduleRetry(new Date(earliestRetryAt).getTime() - Date.now(), true);
+        } else {
+          this.stateStore.setNextScheduledBatch(null);
+        }
+      } else if (this.config.autoEnabled && !this.stopped) {
         this.updateNextScheduled(this.config.intervalMinutes * 60_000);
+      } else {
+        this.stateStore.setNextScheduledBatch(null);
       }
       await this.stateStore.flush();
     }
@@ -168,5 +201,33 @@ export class BatchScheduler {
   private updateNextScheduled(intervalMs: number): void {
     const next = new Date(Date.now() + intervalMs).toISOString();
     this.stateStore.setNextScheduledBatch(next);
+  }
+
+  private scheduleRetry(delayMs: number, updateState = true): void {
+    if (this.stopped) {
+      return;
+    }
+
+    const waitMs = Math.max(delayMs, 1_000);
+    this.clearRetryTimer();
+    if (updateState) {
+      const next = new Date(Date.now() + waitMs).toISOString();
+      this.stateStore.setNextScheduledBatch(next);
+    }
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      this.runBatch().catch((err) =>
+        console.error('[batch-scheduler] Scheduled retry failed:', err),
+      );
+    }, waitMs);
+  }
+
+  private clearRetryTimer(): void {
+    if (!this.retryTimer) {
+      return;
+    }
+
+    clearTimeout(this.retryTimer);
+    this.retryTimer = null;
   }
 }

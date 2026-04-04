@@ -49,6 +49,17 @@ function buildSuggestedAlbumName(): string {
   return '';
 }
 
+function formatDocumentSearchError(error: unknown): string {
+  const message = error instanceof Error ? error.message.trim() : '';
+  if (!message) {
+    return 'Document search unavailable. Could not connect to the document archive.';
+  }
+
+  return message.startsWith('Document search unavailable.')
+    ? message
+    : `Document search unavailable. ${message}`;
+}
+
 function App({
   assetContextService = defaultAssetContextService,
   documentSearchService = defaultDocumentSearchService,
@@ -187,7 +198,7 @@ function App({
             setDocumentFallbackReason(response.fallbackReason);
           }
         }).catch((err: unknown) => {
-          const message = err instanceof Error ? err.message : 'Could not connect to the document archive.';
+          const message = formatDocumentSearchError(err);
           setDocumentError(message);
           setDocumentState('error');
           if (message.includes('not configured')) {
@@ -209,7 +220,7 @@ function App({
       setDocumentHasMore(response.hasMore);
       setDocumentPage(nextPage);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to load more documents.';
+      const message = formatDocumentSearchError(err);
       setDocumentError(message);
     } finally {
       setIsLoadingMoreDocs(false);

@@ -28,6 +28,42 @@ function formatTime(iso: string | null): string {
   });
 }
 
+function calculatePercent(count: number, total: number): number {
+  if (total <= 0) {
+    return 0;
+  }
+
+  return (count / total) * 100;
+}
+
+function formatCountdown(targetIso: string | null, now: number): string {
+  if (!targetIso) {
+    return '—';
+  }
+
+  const target = new Date(targetIso).getTime();
+  if (Number.isNaN(target)) {
+    return '—';
+  }
+
+  const remainingMs = Math.max(target - now, 0);
+  const totalSeconds = Math.ceil(remainingMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes <= 0) {
+    return `${seconds}s`;
+  }
+
+  return `${minutes}m ${seconds}s`;
+}
+
+interface ProgressSegment {
+  className: string;
+  count: number;
+  label: string;
+}
+
 export function IndexingStatus({ service, pollIntervalMs = 30_000 }: IndexingStatusProps) {
   const [summary, setSummary] = useState<IndexingSummary | null>(null);
   const [records, setRecords] = useState<DocumentIndexingRecord[]>([]);
@@ -36,6 +72,7 @@ export function IndexingStatus({ service, pollIntervalMs = 30_000 }: IndexingSta
   const [error, setError] = useState<string | null>(null);
   const [triggering, setTriggering] = useState(false);
   const [lastBatchResult, setLastBatchResult] = useState<BatchResult | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -70,6 +107,19 @@ export function IndexingStatus({ service, pollIntervalMs = 30_000 }: IndexingSta
     }
   }, [showRecords, fetchRecords]);
 
+  useEffect(() => {
+    if (!summary?.nextScheduledBatch) {
+      return undefined;
+    }
+
+    setNow(Date.now());
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [summary?.nextScheduledBatch]);
+
   const handleTriggerBatch = async () => {
     setTriggering(true);
     setLastBatchResult(null);
@@ -102,6 +152,25 @@ export function IndexingStatus({ service, pollIntervalMs = 30_000 }: IndexingSta
   }
 
   if (!summary) return null;
+
+  const completedCount = summary.indexed + summary.failed;
+  const progressPercent = summary.total > 0
+    ? Math.round((completedCount / summary.total) * 100)
+    : 0;
+  const indexedWidth = calculatePercent(summary.indexed, summary.total);
+  const failedWidth = calculatePercent(summary.failed, summary.total);
+  const inProgressWidth = calculatePercent(summary.inProgress, summary.total);
+  const rateLimitedWidth = calculatePercent(summary.rateLimited, summary.total);
+  const pendingWidth = calculatePercent(summary.pending, summary.total);
+  const isWaitingForCooldown = summary.rateLimited > 0 && Boolean(summary.nextScheduledBatch);
+  const progressSegments: ProgressSegment[] = [
+    { label: 'Indexed', count: summary.indexed, className: styles.progressIndexed },
+    { label: 'Failed', count: summary.failed, className: styles.progressFailed },
+    { label: 'In progress', count: summary.inProgress, className: styles.progressInProgress },
+    { label: 'Rate-limited', count: summary.rateLimited, className: styles.progressRateLimited },
+    { label: 'Pending', count: summary.pending, className: styles.progressPending },
+  ].filter((segment) => segment.count > 0);
+  const cooldownCountdown = formatCountdown(summary.nextScheduledBatch, now);
 
   return (
     <section className={styles.container} aria-label="Indexing status">
@@ -150,6 +219,39 @@ export function IndexingStatus({ service, pollIntervalMs = 30_000 }: IndexingSta
         </span>
       </div>
 
+      <div className={styles.progressPanel}>
+        <div className={styles.progressHeader}>
+          <p className={styles.progressLabel}>Progress</p>
+          <p className={styles.progressValue}>{completedCount} / {summary.total} complete</p>
+        </div>
+        <div
+          aria-label="Indexing progress"
+          aria-valuemax={summary.total}
+          aria-valuemin={0}
+          aria-valuenow={completedCount}
+          className={styles.progressTrack}
+          role="progressbar"
+        >
+          <div className={styles.progressIndexed} style={{ width: `${indexedWidth}%` }} />
+          <div className={styles.progressFailed} style={{ width: `${failedWidth}%` }} />
+          <div className={styles.progressInProgress} style={{ width: `${inProgressWidth}%` }} />
+          <div className={styles.progressRateLimited} style={{ width: `${rateLimitedWidth}%` }} />
+          <div className={styles.progressPending} style={{ width: `${pendingWidth}%` }} />
+        </div>
+        <p className={styles.progressCaption}>{progressPercent}% finished</p>
+        {progressSegments.length > 0 && (
+          <ul className={styles.progressLegend}>
+            {progressSegments.map((segment) => (
+              <li key={segment.label} className={styles.progressLegendItem}>
+                <span className={`${styles.progressLegendSwatch} ${segment.className}`} aria-hidden="true" />
+                <span>{segment.label}</span>
+                <span className={styles.progressLegendCount}>{segment.count}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       <div className={styles.batchInfo}>
         {summary.lastBatchAt && (
           <p className={styles.batchInfoItem}>
@@ -159,7 +261,9 @@ export function IndexingStatus({ service, pollIntervalMs = 30_000 }: IndexingSta
         )}
         {summary.nextScheduledBatch && (
           <p className={styles.batchInfoItem}>
-            Next scheduled: {formatTime(summary.nextScheduledBatch)}
+            {isWaitingForCooldown
+              ? `Cooldown ends: ${formatTime(summary.nextScheduledBatch)} (${cooldownCountdown} remaining) — batching will resume automatically.`
+              : `Next scheduled: ${formatTime(summary.nextScheduledBatch)}`}
           </p>
         )}
       </div>

@@ -8,6 +8,8 @@ export interface DocumentIndexingRecord {
   title: string;
   fingerprint: string;
   status: IndexingStatus;
+  totalChunks: number | null;
+  completedChunks: number | null;
   retryCount: number;
   lastAttemptAt: string | null;
   lastSuccessAt: string | null;
@@ -61,7 +63,16 @@ export class IndexingStateStore {
       const raw = await fs.readFile(this.filePath, 'utf8');
       const parsed = JSON.parse(raw) as Partial<StoreSnapshot>;
       this.snapshot = {
-        records: parsed.records ?? {},
+        records: Object.fromEntries(
+          Object.entries(parsed.records ?? {}).map(([docId, record]) => [
+            docId,
+            {
+              ...record,
+              totalChunks: record.totalChunks ?? null,
+              completedChunks: record.completedChunks ?? null,
+            },
+          ]),
+        ),
         lastBatchAt: parsed.lastBatchAt ?? null,
         lastBatchResult: parsed.lastBatchResult ?? null,
         nextScheduledBatch: parsed.nextScheduledBatch ?? null,
@@ -95,6 +106,28 @@ export class IndexingStateStore {
     return this.snapshot.records[docId];
   }
 
+  recoverInterruptedRecords(): void {
+    let changed = false;
+    for (const record of Object.values(this.snapshot.records)) {
+      if (record.status !== 'in-progress') {
+        continue;
+      }
+
+      record.status =
+        record.totalChunks !== null &&
+        record.completedChunks !== null &&
+        record.completedChunks >= record.totalChunks
+          ? 'indexed'
+          : 'pending';
+      record.nextRetryAt = null;
+      changed = true;
+    }
+
+    if (changed) {
+      this.scheduleSave();
+    }
+  }
+
   upsertRecord(record: DocumentIndexingRecord): void {
     this.snapshot.records[record.documentId] = record;
     this.scheduleSave();
@@ -112,6 +145,8 @@ export class IndexingStateStore {
       title,
       fingerprint,
       status: 'pending',
+      totalChunks: null,
+      completedChunks: null,
       retryCount: existing?.retryCount ?? 0,
       lastAttemptAt: existing?.lastAttemptAt ?? null,
       lastSuccessAt: existing?.lastSuccessAt ?? null,
@@ -129,10 +164,37 @@ export class IndexingStateStore {
     this.scheduleSave();
   }
 
+  setChunkProgress(
+    docId: number,
+    title: string,
+    fingerprint: string,
+    totalChunks: number,
+    completedChunks: number,
+  ): void {
+    const existing = this.snapshot.records[docId];
+    this.snapshot.records[docId] = {
+      documentId: docId,
+      title,
+      fingerprint,
+      status: completedChunks >= totalChunks ? 'indexed' : 'in-progress',
+      totalChunks,
+      completedChunks,
+      retryCount: existing?.retryCount ?? 0,
+      lastAttemptAt: new Date().toISOString(),
+      lastSuccessAt: completedChunks >= totalChunks ? new Date().toISOString() : existing?.lastSuccessAt ?? null,
+      lastError: null,
+      nextRetryAt: null,
+    };
+    this.scheduleSave();
+  }
+
   markIndexed(docId: number): void {
     const rec = this.snapshot.records[docId];
     if (!rec) return;
     rec.status = 'indexed';
+    if (rec.totalChunks !== null) {
+      rec.completedChunks = rec.totalChunks;
+    }
     rec.lastSuccessAt = new Date().toISOString();
     rec.lastError = null;
     rec.nextRetryAt = null;
@@ -185,6 +247,16 @@ export class IndexingStateStore {
       }
       return false;
     });
+  }
+
+  getEarliestRetryAt(): string | null {
+    const retryTimes = Object.values(this.snapshot.records)
+      .filter((record) => record.status === 'rate-limited' && record.nextRetryAt)
+      .map((record) => record.nextRetryAt as string)
+      .filter((time) => !Number.isNaN(new Date(time).getTime()))
+      .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+    return retryTimes[0] ?? null;
   }
 
   getSummary(): IndexingSummary {
