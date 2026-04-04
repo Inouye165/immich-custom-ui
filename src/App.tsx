@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ArchiveFeaturedImage, DocumentResult, SearchRequest, SearchResult, SearchSource } from './types';
-import { ApiAssetContextService, ApiDocumentSearchService, ApiSearchService, ApiTrashService } from './services';
-import type { AssetContextService, DocumentSearchService, SearchService, TrashService } from './services';
+import type { ArchiveFeaturedImage, DocumentResult, DocumentSearchMode, SearchRequest, SearchResult, SearchSource } from './types';
+import { ApiAssetContextService, ApiDocumentSearchService, ApiSearchService, ApiTrashService, ApiIndexingStatusService } from './services';
+import type { AssetContextService, DocumentSearchService, SearchService, TrashService, IndexingStatusService } from './services';
 import type { AssetContextResponse } from './types';
 import {
   ArchiveHero,
@@ -13,7 +13,7 @@ import {
 } from './features/archive';
 import { AlbumDraftPanel, loadAlbumPreferences, saveAlbumPreferences } from './features/albums';
 import { SearchForm, SearchResults } from './features/search';
-import { DocumentResults } from './features/documents';
+import { DocumentResults, IndexingStatus } from './features/documents';
 import { AssetDetailsPanel } from './features/assets';
 import { EmptyState, ErrorBanner } from './components';
 import styles from './App.module.css';
@@ -24,10 +24,12 @@ const defaultAssetContextService = new ApiAssetContextService();
 const defaultSearchService = new ApiSearchService();
 const defaultTrashService = new ApiTrashService();
 const defaultDocumentSearchService = new ApiDocumentSearchService();
+const defaultIndexingStatusService = new ApiIndexingStatusService();
 
 interface AppProps {
   assetContextService?: AssetContextService;
   documentSearchService?: DocumentSearchService;
+  indexingStatusService?: IndexingStatusService;
   searchService?: SearchService;
   trashService?: TrashService;
 }
@@ -50,6 +52,7 @@ function buildSuggestedAlbumName(): string {
 function App({
   assetContextService = defaultAssetContextService,
   documentSearchService = defaultDocumentSearchService,
+  indexingStatusService = defaultIndexingStatusService,
   searchService = defaultSearchService,
   trashService = defaultTrashService,
 }: AppProps) {
@@ -83,6 +86,9 @@ function App({
   const [isLoadingMoreDocs, setIsLoadingMoreDocs] = useState(false);
   const [lastDocQuery, setLastDocQuery] = useState('');
   const [paperlessAvailable, setPaperlessAvailable] = useState(true);
+  const [documentMode, setDocumentMode] = useState<DocumentSearchMode>('hybrid');
+  const [documentFallbackReason, setDocumentFallbackReason] = useState('');
+  const [isDeletingDocs, setIsDeletingDocs] = useState(false);
   const [albumDrafts, setAlbumDrafts] = useState<AlbumDraft[]>(() => initialAlbumPreferencesRef.current.albums);
   const [isAlbumWorkspaceOpen, setIsAlbumWorkspaceOpen] = useState(false);
   const [activeAlbumDraftId, setActiveAlbumDraftId] = useState<string | null>(
@@ -143,6 +149,10 @@ function App({
       setDocumentHasMore(false);
       setDocumentPage(1);
       setLastDocQuery(request.query);
+      setDocumentFallbackReason('');
+      if (request.documentMode) {
+        setDocumentMode(request.documentMode);
+      }
     } else {
       setDocumentResults([]);
       setDocumentTotal(0);
@@ -167,12 +177,15 @@ function App({
 
     if (searchDocs) {
       promises.push(
-        documentSearchService.searchDocuments(request.query).then((response) => {
+        documentSearchService.searchDocuments(request.query, 1, request.documentMode).then((response) => {
           setDocumentResults(response.results);
           setDocumentTotal(response.total);
           setDocumentHasMore(response.hasMore);
           setDocumentPage(1);
           setDocumentState('success');
+          if (response.fallback && response.fallbackReason) {
+            setDocumentFallbackReason(response.fallbackReason);
+          }
         }).catch((err: unknown) => {
           const message = err instanceof Error ? err.message : 'Could not connect to the document archive.';
           setDocumentError(message);
@@ -191,7 +204,7 @@ function App({
     const nextPage = documentPage + 1;
     setIsLoadingMoreDocs(true);
     try {
-      const response = await documentSearchService.searchDocuments(lastDocQuery, nextPage);
+      const response = await documentSearchService.searchDocuments(lastDocQuery, nextPage, documentMode);
       setDocumentResults((current) => [...current, ...response.results]);
       setDocumentHasMore(response.hasMore);
       setDocumentPage(nextPage);
@@ -200,6 +213,21 @@ function App({
       setDocumentError(message);
     } finally {
       setIsLoadingMoreDocs(false);
+    }
+  };
+
+  const handleDeleteDocuments = async (ids: number[]) => {
+    setIsDeletingDocs(true);
+    try {
+      await Promise.all(ids.map((id) => documentSearchService.deleteDocument(id)));
+      const deletedSet = new Set(ids);
+      setDocumentResults((current) => current.filter((doc) => !deletedSet.has(doc.id)));
+      setDocumentTotal((current) => Math.max(0, current - ids.length));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete documents.';
+      setDocumentError(message);
+    } finally {
+      setIsDeletingDocs(false);
     }
   };
 
@@ -575,8 +603,18 @@ function App({
 
         {documentState === 'error' && <ErrorBanner message={documentError} />}
 
+        {documentFallbackReason && documentState === 'success' && (
+          <div className={styles.fallbackBanner} role="status">
+            {documentFallbackReason}
+          </div>
+        )}
+
         {documentState === 'loading' && (
           <EmptyState message="Searching documents…" />
+        )}
+
+        {paperlessAvailable && (
+          <IndexingStatus service={indexingStatusService} />
         )}
 
         {documentState === 'success' && documentResults.length === 0 && (
@@ -589,7 +627,9 @@ function App({
             total={documentTotal}
             hasMore={documentHasMore}
             isLoadingMore={isLoadingMoreDocs}
+            isDeleting={isDeletingDocs}
             onLoadMore={handleLoadMoreDocuments}
+            onDeleteDocuments={handleDeleteDocuments}
           />
         )}
 

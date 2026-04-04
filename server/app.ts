@@ -3,7 +3,7 @@ import type { Response } from 'express';
 import { ZodError } from 'zod';
 import { buildAssetContext } from './assets/buildAssetContext';
 import { assetContextQuerySchema, assetParamsSchema, trashRequestSchema } from './assets/assetSchemas';
-import { getServerConfig, type ServerConfig } from './config';
+import { getServerConfig, getPaperlessConfig, getVectorConfig, type ServerConfig } from './config';
 import {
   createLiveImmichGateway,
   isRecoverableServerError,
@@ -22,21 +22,32 @@ import {
   thumbnailQuerySchema,
 } from './search/searchSchemas';
 import {
-  createLivePaperlessGateway,
+  createPaperlessGatewayFromConfig,
   type PaperlessGateway,
 } from './paperless/PaperlessGateway';
 import {
   documentSearchQuerySchema,
   documentParamsSchema,
 } from './paperless/paperlessSchemas';
+import { HybridDocumentSearchService } from './vector/HybridDocumentSearchService';
+import { DocumentSemanticSearchService } from './vector/DocumentSemanticSearchService';
+import { OpenAICompatibleEmbeddingService } from './vector/EmbeddingService';
+import { getQdrantClient } from './vector/QdrantClientFactory';
+import { IndexingStateStore } from './vector/IndexingStateStore';
+import { EmbeddingRateLimiter } from './vector/EmbeddingRateLimiter';
+import { DocumentIndexer } from './vector/DocumentIndexer';
+import { BatchScheduler } from './vector/BatchScheduler';
 
 interface AppDependencies {
   immichGateway?: ImmichGateway;
   aiSummaryService?: AiSummaryService;
   paperlessGateway?: PaperlessGateway;
+  hybridSearchService?: HybridDocumentSearchService;
   poiService?: PoiService;
   serverConfig?: ServerConfig;
   weatherService?: WeatherService;
+  indexingStateStore?: IndexingStateStore;
+  batchScheduler?: BatchScheduler;
 }
 
 export function createApp(dependencies: AppDependencies = {}) {
@@ -47,6 +58,9 @@ export function createApp(dependencies: AppDependencies = {}) {
   let serverConfig = dependencies.serverConfig;
   let weatherService = dependencies.weatherService;
   let paperlessGw = dependencies.paperlessGateway;
+  let hybridSearch = dependencies.hybridSearchService;
+  let indexingStore = dependencies.indexingStateStore;
+  let batchScheduler = dependencies.batchScheduler;
 
   app.use(express.json({ limit: '16kb' }));
 
@@ -197,19 +211,16 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   app.get('/api/documents/search', async (req, res) => {
     try {
-      const { query, page } = documentSearchQuerySchema.parse(req.query);
-      const raw = await getPaperlessGateway().searchDocuments(query, page);
+      const { query, page, mode } = documentSearchQuerySchema.parse(req.query);
+      const service = getHybridSearchService();
+      const result = await service.search(query, page, mode);
       res.json({
-        results: raw.results.map((doc) => ({
-          id: doc.id,
-          title: doc.title,
-          createdDate: doc.created,
-          thumbnailUrl: `/api/documents/${doc.id}/thumb`,
-          previewUrl: `/api/documents/${doc.id}/preview`,
-          snippet: doc.content ? doc.content.slice(0, 280) : undefined,
-        })),
-        total: raw.count,
-        hasMore: raw.next !== null,
+        results: result.results,
+        total: result.total,
+        hasMore: result.hasMore,
+        mode: result.mode,
+        fallback: result.fallback,
+        fallbackReason: result.fallbackReason,
       });
     } catch (error) {
       handleError(error, res);
@@ -236,19 +247,57 @@ export function createApp(dependencies: AppDependencies = {}) {
       const { id } = documentParamsSchema.parse(req.params);
       const upstream = await getPaperlessGateway().fetchPreview(id);
       const contentType = upstream.headers.get('content-type') ?? 'application/pdf';
-      const contentLength = upstream.headers.get('content-length');
+      const payload = Buffer.from(await upstream.arrayBuffer());
       res.setHeader('Content-Type', contentType);
       res.setHeader('Content-Disposition', 'inline');
-      if (contentLength) {
-        res.setHeader('Content-Length', contentLength);
-      }
-      if (upstream.body) {
-        const { Readable } = await import('node:stream');
-        const nodeStream = Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream);
-        nodeStream.pipe(res);
-      } else {
-        res.end();
-      }
+      res.setHeader('Content-Length', payload.length);
+      res.send(payload);
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
+  app.delete('/api/documents/:id', async (req, res) => {
+    try {
+      const { id } = documentParamsSchema.parse(req.params);
+      await getPaperlessGateway().deleteDocument(id);
+      res.json({ deletedId: id });
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
+  app.get('/api/indexing/summary', async (_req, res) => {
+    try {
+      const store = await getIndexingStateStore();
+      res.json(store.getSummary());
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
+  app.get('/api/indexing/records', async (req, res) => {
+    try {
+      const store = await getIndexingStateStore();
+      const all = store.getAllRecords();
+      const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+      const offset = Math.max(Number(req.query.offset) || 0, 0);
+      res.json({
+        records: all.slice(offset, offset + limit),
+        total: all.length,
+        limit,
+        offset,
+      });
+    } catch (error) {
+      handleError(error, res);
+    }
+  });
+
+  app.post('/api/indexing/batch', async (_req, res) => {
+    try {
+      const scheduler = await getBatchScheduler();
+      const result = await scheduler.runBatch();
+      res.json(result);
     } catch (error) {
       handleError(error, res);
     }
@@ -282,8 +331,70 @@ export function createApp(dependencies: AppDependencies = {}) {
   }
 
   function getPaperlessGateway() {
-    paperlessGw ??= createLivePaperlessGateway(getServerConfigValue());
+    if (!paperlessGw) {
+      const plConfig = getPaperlessConfig();
+      if (!plConfig) {
+        throw new Error('Paperless is not configured. Set PAPERLESS_BASE_URL and PAPERLESS_API_TOKEN.');
+      }
+      paperlessGw = createPaperlessGatewayFromConfig(plConfig);
+    }
     return paperlessGw;
+  }
+
+  function getHybridSearchService() {
+    if (!hybridSearch) {
+      const plGw = getPaperlessGateway();
+      let semanticService: DocumentSemanticSearchService | null = null;
+
+      const vecConfig = getVectorConfig();
+      if (vecConfig) {
+        try {
+          const qdrant = getQdrantClient(vecConfig);
+          const embedding = new OpenAICompatibleEmbeddingService(vecConfig);
+          semanticService = new DocumentSemanticSearchService(qdrant, embedding, vecConfig);
+        } catch (err) {
+          console.error('[app] Failed to initialize semantic search:', err);
+        }
+      }
+
+      hybridSearch = new HybridDocumentSearchService(plGw, semanticService);
+    }
+    return hybridSearch;
+  }
+
+  async function getIndexingStateStore(): Promise<IndexingStateStore> {
+    if (!indexingStore) {
+      indexingStore = new IndexingStateStore();
+      await indexingStore.load();
+    }
+    return indexingStore;
+  }
+
+  async function getBatchScheduler(): Promise<BatchScheduler> {
+    if (!batchScheduler) {
+      const vecConfig = getVectorConfig();
+      if (!vecConfig) {
+        throw new Error('Vector search is not configured. Enable DOCUMENT_VECTOR_ENABLED.');
+      }
+      const plGw = getPaperlessGateway();
+      const qdrant = getQdrantClient(vecConfig);
+      const rawEmbedding = new OpenAICompatibleEmbeddingService(vecConfig);
+      const rateLimiter = new EmbeddingRateLimiter(rawEmbedding, {
+        requestsPerMinute: vecConfig.embedRequestsPerMinute,
+        cooldownMinutes: vecConfig.embedCooldownMinutes,
+        maxRetries: vecConfig.embedMaxRetries,
+        backoffBaseMs: vecConfig.embedBackoffBaseMs,
+        backoffMaxMs: vecConfig.embedBackoffMaxMs,
+      });
+      const store = await getIndexingStateStore();
+      const indexer = new DocumentIndexer(plGw, qdrant, rateLimiter, vecConfig, store);
+      batchScheduler = new BatchScheduler(indexer, store, {
+        autoEnabled: vecConfig.autoIndexEnabled,
+        intervalMinutes: vecConfig.autoIndexIntervalMinutes,
+        batchSize: vecConfig.indexBatchSize,
+      });
+    }
+    return batchScheduler;
   }
 }
 

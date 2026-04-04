@@ -67,4 +67,66 @@ describe('ApiDocumentSearchService', () => {
     const calledUrl = new URL(fetchMock.mock.calls[0][0] as string);
     expect(calledUrl.searchParams.get('page')).toBe('3');
   });
+
+  it('includes mode parameter when provided', async () => {
+    const mockResponse = { results: [], total: 0, hasMore: false };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(mockResponse), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = new ApiDocumentSearchService();
+    await service.searchDocuments('test', 1, 'semantic');
+
+    const calledUrl = new URL(fetchMock.mock.calls[0][0] as string);
+    expect(calledUrl.searchParams.get('mode')).toBe('semantic');
+  });
+
+  it('omits mode parameter when not provided', async () => {
+    const mockResponse = { results: [], total: 0, hasMore: false };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(mockResponse), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = new ApiDocumentSearchService();
+    await service.searchDocuments('test');
+
+    const calledUrl = new URL(fetchMock.mock.calls[0][0] as string);
+    expect(calledUrl.searchParams.has('mode')).toBe(false);
+  });
+
+  it('deletes a document successfully', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ deletedId: 5 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = new ApiDocumentSearchService();
+    await service.deleteDocument(5);
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/documents/5', { method: 'DELETE' });
+  });
+
+  it('throws on failed document deletion', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Document not found.' }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = new ApiDocumentSearchService();
+    await expect(service.deleteDocument(999)).rejects.toThrow('Document not found.');
+  });
 });

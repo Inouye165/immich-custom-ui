@@ -219,3 +219,36 @@
   border-color: rgba(184, 151, 72, 0.28);
   box-shadow: 0 2px 8px rgba(72, 56, 29, 0.06);
 }
+
+/* ── Document mode filter ── */
+
+.docModeFilter {
+  display: flex;
+  gap: 0.3rem;
+  border: none;
+  margin: 0;
+  padding: 0 0.75rem;
+  justify-content: center;
+}
+
+.docModeOption {
+  padding: 0.32rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: #8d836c;
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.docModeOption:hover {
+  background: rgba(14, 141, 150, 0.06);
+}
+
+.docModeOptionActive {
+  background: rgba(14, 141, 150, 0.08);
+  color: #0e8d96;
+  border-color: rgba(14, 141, 150, 0.22);
+}

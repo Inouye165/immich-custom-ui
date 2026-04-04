@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import type { SearchRequest, SearchSource } from '../../types';
+import type { DocumentSearchMode, SearchRequest, SearchSource } from '../../types';
 import styles from './SearchForm.module.css';
 
 interface SearchFormProps {
@@ -15,16 +15,24 @@ const SOURCE_OPTIONS: { value: SearchSource; label: string }[] = [
   { value: 'documents', label: 'Documents' },
 ];
 
+const DOC_MODE_OPTIONS: { value: DocumentSearchMode; label: string }[] = [
+  { value: 'hybrid', label: 'Hybrid' },
+  { value: 'keyword', label: 'Keyword' },
+  { value: 'semantic', label: 'Semantic' },
+];
+
 export function SearchForm({ onSearch, isLoading, showSourceFilter = false }: SearchFormProps) {
   const [query, setQuery] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [source, setSource] = useState<SearchSource>('all');
+  const [documentMode, setDocumentMode] = useState<DocumentSearchMode>('hybrid');
   const [error, setError] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
 
   const panelId = 'search-advanced-filters';
   const showDateFilters = source !== 'documents';
+  const searchesDocs = source === 'all' || source === 'documents';
 
   const validate = (): string | null => {
     const trimmed = query.trim();
@@ -49,6 +57,7 @@ export function SearchForm({ onSearch, isLoading, showSourceFilter = false }: Se
       startDate: showDateFilters && startDate ? startDate : undefined,
       endDate: showDateFilters && endDate ? endDate : undefined,
       source,
+      documentMode: searchesDocs ? documentMode : undefined,
     });
   };
 
@@ -102,6 +111,25 @@ export function SearchForm({ onSearch, isLoading, showSourceFilter = false }: Se
                   value={opt.value}
                   checked={source === opt.value}
                   onChange={() => setSource(opt.value)}
+                  className={styles.srOnly}
+                />
+                {opt.label}
+              </label>
+            ))}
+          </fieldset>
+        )}
+
+        {showSourceFilter && searchesDocs && (
+          <fieldset className={styles.docModeFilter} role="radiogroup" aria-label="Document search mode">
+            <legend className={styles.srOnly}>Document search mode</legend>
+            {DOC_MODE_OPTIONS.map((opt) => (
+              <label key={opt.value} className={`${styles.docModeOption} ${documentMode === opt.value ? styles.docModeOptionActive : ''}`}>
+                <input
+                  type="radio"
+                  name="doc-search-mode"
+                  value={opt.value}
+                  checked={documentMode === opt.value}
+                  onChange={() => setDocumentMode(opt.value)}
                   className={styles.srOnly}
                 />
                 {opt.label}

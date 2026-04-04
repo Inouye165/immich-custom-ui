@@ -159,4 +159,96 @@ describe('DocumentResults', () => {
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
+
+  it('renders select checkboxes when onDeleteDocuments is provided', () => {
+    render(
+      <DocumentResults
+        results={SAMPLE_DOCS}
+        total={2}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={vi.fn()}
+        onDeleteDocuments={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText('Select Tax Return 2024')).toBeInTheDocument();
+    expect(screen.getByLabelText('Select Lease Agreement')).toBeInTheDocument();
+  });
+
+  it('does not render checkboxes when onDeleteDocuments is not provided', () => {
+    render(
+      <DocumentResults
+        results={SAMPLE_DOCS}
+        total={2}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText('Select Tax Return 2024')).not.toBeInTheDocument();
+  });
+
+  it('shows delete button after selecting documents', async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn();
+    render(
+      <DocumentResults
+        results={SAMPLE_DOCS}
+        total={2}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={vi.fn()}
+        onDeleteDocuments={onDelete}
+      />,
+    );
+
+    await user.click(screen.getByLabelText('Select Tax Return 2024'));
+    const deleteBtn = screen.getByRole('button', { name: /Delete 1 selected/ });
+    expect(deleteBtn).toBeInTheDocument();
+
+    await user.click(deleteBtn);
+    expect(onDelete).toHaveBeenCalledWith([1]);
+  });
+
+  it('allows selecting multiple documents for deletion', async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn();
+    render(
+      <DocumentResults
+        results={SAMPLE_DOCS}
+        total={2}
+        hasMore={false}
+        isLoadingMore={false}
+        onLoadMore={vi.fn()}
+        onDeleteDocuments={onDelete}
+      />,
+    );
+
+    await user.click(screen.getByLabelText('Select Tax Return 2024'));
+    await user.click(screen.getByLabelText('Select Lease Agreement'));
+    const deleteBtn = screen.getByRole('button', { name: /Delete 2 selected/ });
+    await user.click(deleteBtn);
+    expect(onDelete).toHaveBeenCalledWith([1, 2]);
+  });
+
+  it('disables delete button when isDeleting is true', async () => {
+    const user = userEvent.setup();
+    render(
+      <DocumentResults
+        results={SAMPLE_DOCS}
+        total={2}
+        hasMore={false}
+        isLoadingMore={false}
+        isDeleting={true}
+        onLoadMore={vi.fn()}
+        onDeleteDocuments={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByLabelText('Select Tax Return 2024'));
+    const deleteBtn = screen.getByRole('button', { name: /Deleting/ });
+    expect(deleteBtn).toBeDisabled();
+  });
 });

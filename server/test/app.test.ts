@@ -126,8 +126,10 @@ describe('server app', () => {
 function createPaperlessStub(overrides: Partial<PaperlessGateway> = {}): PaperlessGateway {
   return {
     searchDocuments: vi.fn(),
+    listDocuments: vi.fn(),
     fetchThumbnail: vi.fn(),
     fetchPreview: vi.fn(),
+    deleteDocument: vi.fn(),
     ...overrides,
   };
 }
@@ -173,7 +175,7 @@ describe('document search routes', () => {
 
     const response = await request(app)
       .get('/api/documents/search')
-      .query({ query: 'tax' });
+      .query({ query: 'tax', mode: 'keyword' });
 
     expect(response.status).toBe(200);
     expect(response.body.total).toBe(1);
@@ -208,5 +210,33 @@ describe('document search routes', () => {
       .query({ query: 'invoice', page: '3' });
 
     expect(paperless.searchDocuments).toHaveBeenCalledWith('invoice', 3);
+  });
+});
+
+describe('document delete route', () => {
+  it('deletes a document and returns the deleted id', async () => {
+    const paperless = createPaperlessStub({
+      deleteDocument: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const app = createApp({
+      immichGateway: createGatewayStub({}),
+      paperlessGateway: paperless,
+    });
+
+    const response = await request(app).delete('/api/documents/42');
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ deletedId: 42 });
+    expect(paperless.deleteDocument).toHaveBeenCalledWith(42);
+  });
+
+  it('rejects non-integer document id', async () => {
+    const app = createApp({
+      immichGateway: createGatewayStub({}),
+      paperlessGateway: createPaperlessStub(),
+    });
+
+    const response = await request(app).delete('/api/documents/abc');
+    expect(response.status).toBe(400);
   });
 });

@@ -1,0 +1,197 @@
+.container {
+  padding: 1rem;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 8px;
+  background: var(--surface-color, #fff);
+  margin-bottom: 1rem;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.triggerButton {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 4px;
+  background: var(--surface-color, #fff);
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background-color 0.15s ease;
+}
+
+.triggerButton:hover:not(:disabled) {
+  background-color: var(--hover-color, #f0f0f0);
+}
+
+.triggerButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  background: var(--stat-bg, #f5f5f5);
+}
+
+.statCount {
+  font-weight: 600;
+}
+
+.statPending {
+  color: #7c6a0a;
+  background: #fef9c3;
+}
+
+.statInProgress {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
+.statIndexed {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.statFailed {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.statRateLimited {
+  color: #9a3412;
+  background: #ffedd5;
+}
+
+.batchInfo {
+  font-size: 0.75rem;
+  color: var(--muted-color, #888);
+  margin-bottom: 0.75rem;
+}
+
+.batchInfoItem {
+  margin: 0.15rem 0;
+}
+
+.toggleRecords {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.8rem;
+  color: var(--link-color, #2563eb);
+  cursor: pointer;
+  text-decoration: underline;
+  margin-bottom: 0.5rem;
+}
+
+.toggleRecords:hover {
+  opacity: 0.8;
+}
+
+.recordList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.recordItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--border-color, #eee);
+  font-size: 0.8rem;
+}
+
+.recordItem:last-child {
+  border-bottom: none;
+}
+
+.statusBadge {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.badgePending {
+  color: #7c6a0a;
+  background: #fef9c3;
+}
+
+.badgeInProgress {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
+.badgeIndexed {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.badgeFailed {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.badgeRateLimited {
+  color: #9a3412;
+  background: #ffedd5;
+}
+
+.recordTitle {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recordError {
+  font-size: 0.7rem;
+  color: #991b1b;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loading {
+  font-size: 0.8rem;
+  color: var(--muted-color, #888);
+  padding: 0.5rem 0;
+}
+
+.error {
+  font-size: 0.8rem;
+  color: #991b1b;
+  padding: 0.5rem 0;
+}

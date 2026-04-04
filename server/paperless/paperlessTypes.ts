@@ -5,10 +5,12 @@ export interface PaperlessDocument {
   title: string;
   created: string;
   added: string;
+  modified?: string;
   correspondent: number | null;
   document_type: number | null;
   archive_serial_number: number | null;
   content?: string;
+  tags?: number[];
 }
 
 export interface PaperlessSearchResponse {

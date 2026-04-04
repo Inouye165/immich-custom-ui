@@ -1,11 +1,13 @@
-import { ConfigurationError, type ServerConfig } from '../config';
+import { ConfigurationError, type PaperlessConfig } from '../config';
 import { UpstreamHttpError } from '../immich/ImmichGateway';
 import type { PaperlessSearchResponse } from './paperlessTypes';
 
 export interface PaperlessGateway {
   searchDocuments(query: string, page?: number): Promise<PaperlessSearchResponse>;
+  listDocuments(page?: number): Promise<PaperlessSearchResponse>;
   fetchThumbnail(documentId: number): Promise<Response>;
   fetchPreview(documentId: number): Promise<Response>;
+  deleteDocument(documentId: number): Promise<void>;
 }
 
 export class LivePaperlessGateway implements PaperlessGateway {
@@ -34,6 +36,18 @@ export class LivePaperlessGateway implements PaperlessGateway {
     return (await response.json()) as PaperlessSearchResponse;
   }
 
+  async listDocuments(page = 1): Promise<PaperlessSearchResponse> {
+    const url = new URL(`${this.baseUrl}/api/documents/`);
+    url.searchParams.set('page', String(page));
+    url.searchParams.set('ordering', '-created');
+
+    const response = await fetch(url, { headers: this.headers() });
+    if (!response.ok) {
+      throw await buildUpstreamError(response, 'document-list');
+    }
+    return (await response.json()) as PaperlessSearchResponse;
+  }
+
   async fetchThumbnail(documentId: number): Promise<Response> {
     const response = await fetch(
       `${this.baseUrl}/api/documents/${documentId}/thumb/`,
@@ -55,9 +69,25 @@ export class LivePaperlessGateway implements PaperlessGateway {
     }
     return response;
   }
+
+  async deleteDocument(documentId: number): Promise<void> {
+    const response = await fetch(
+      `${this.baseUrl}/api/documents/${documentId}/`,
+      { method: 'DELETE', headers: this.headers() },
+    );
+    if (!response.ok) {
+      throw await buildUpstreamError(response, 'document-delete');
+    }
+  }
 }
 
-export function createLivePaperlessGateway(config: ServerConfig): PaperlessGateway {
+/** Create gateway from PaperlessConfig (independent of Immich). */
+export function createPaperlessGatewayFromConfig(config: PaperlessConfig): PaperlessGateway {
+  return new LivePaperlessGateway(config.baseUrl, config.apiToken);
+}
+
+/** @deprecated Use createPaperlessGatewayFromConfig with getPaperlessConfig(). */
+export function createLivePaperlessGateway(config: { paperlessBaseUrl?: string; paperlessApiToken?: string }): PaperlessGateway {
   if (!config.paperlessBaseUrl || !config.paperlessApiToken) {
     throw new ConfigurationError(
       'Paperless is not configured. Set PAPERLESS_BASE_URL and PAPERLESS_API_TOKEN.',

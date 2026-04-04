@@ -1,6 +1,6 @@
 export type { SearchRequest, SearchResult, SearchResponse, SearchSource } from './search';
 export type { ArchiveFeaturedImage, ArchivePreferences } from './archive';
-export type { DocumentResult, DocumentSearchResponse } from './document';
+export type { DocumentResult, DocumentSearchResponse, DocumentSearchMode } from './document';
 export type {
 	AssetContextResponse,
 	AssetDetails,
@@ -10,3 +10,10 @@ export type {
 	AssetWeather,
 	NearbyPoi,
 } from './assetContext';
+export type {
+	IndexingStatus,
+	DocumentIndexingRecord,
+	IndexingSummary,
+	IndexingRecordsResponse,
+	BatchResult,
+} from './indexing';

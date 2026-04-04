@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
-import type { AssetContextService, SearchService } from '../services';
+import type { AssetContextService, DocumentSearchService, IndexingStatusService, SearchService } from '../services';
 
 vi.mock('../features/assets/AssetLocationMap', () => ({
   AssetLocationMap: () => <div data-testid="asset-location-map" />,
@@ -24,6 +24,32 @@ function createAssetContextService(
 ): AssetContextService {
   return {
     getAssetContext: vi.fn(),
+    ...overrides,
+  };
+}
+
+function createDocumentSearchService(
+  overrides: Partial<DocumentSearchService> = {},
+): DocumentSearchService {
+  return {
+    searchDocuments: vi.fn().mockResolvedValue({ results: [], total: 0, hasMore: false }),
+    deleteDocument: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+function createIndexingStatusService(
+  overrides: Partial<IndexingStatusService> = {},
+): IndexingStatusService {
+  return {
+    getSummary: vi.fn().mockResolvedValue({
+      pending: 0, inProgress: 0, indexed: 0, failed: 0, rateLimited: 0, total: 0,
+      lastBatchAt: null, lastBatchResult: null, nextScheduledBatch: null,
+    }),
+    getRecords: vi.fn().mockResolvedValue({ records: [], total: 0, limit: 100, offset: 0 }),
+    triggerBatch: vi.fn().mockResolvedValue({
+      processed: 0, indexed: 0, skipped: 0, failed: 0, rateLimited: 0, durationMs: 0, stoppedByRateLimit: false,
+    }),
     ...overrides,
   };
 }
@@ -167,7 +193,7 @@ describe('App', () => {
       getAssetContext: vi.fn(),
     });
 
-    render(<App assetContextService={assetContextService} searchService={searchService} />);
+    render(<App assetContextService={assetContextService} documentSearchService={createDocumentSearchService()} searchService={searchService} />);
 
     await user.type(screen.getByLabelText('Search'), 'beach');
     await user.click(screen.getByRole('button', { name: 'Search' }));
